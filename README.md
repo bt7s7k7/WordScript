@@ -7,16 +7,16 @@ Word script source is made of words. Words are strings separated by whitespace. 
 <name> [argument [...]] ["X"]
 ````
 
-You can join statements using a capital I. This will put the output of the first statement as the first argument of the second statement. 
+You can join statements using a capital I or a pipe. This will put the output of the first statement as the first argument of the second statement. 
 
 ````
-<statement> "I" <statement>
+<statement> "I" | "|" <statement>
 ````
 If the statement being piped into begins with a dot, the statement name gets prefixed with the name of the type of the output of the first statement.
 ````
-int.mul 5 10 I .add 4
+int.mul 5 10 | .add 4
 "is equivalent to:"
-int.mul 5 10 I int.add 4
+int.mul 5 10 | int.add 4
 ````
 
 A word identifies a function defined in the program embedding the language. There are special words meaning other things.
@@ -40,6 +40,6 @@ The interpreter automatically generates conversion functions: `<output type>.fro
 ````
 print "Hello world"
 print (string.concat "Hello" "world")
-int.mul 5 10 I int.toString I concat " = 25" I print
+int.mul 5 10 | int.toString | concat " = 25" | print
 "^ Prints 25 = 25"
 ````
