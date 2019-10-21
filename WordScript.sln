@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WordScript", "WordScript\Wo
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WordScriptTests", "WordScriptTests\WordScriptTests.csproj", "{C69707B3-FD22-4BAA-A273-A02728E02567}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WordScriptREPL", "WordScriptREPL\WordScriptREPL.csproj", "{72592C4D-7A1A-4779-B16B-F9A023933F44}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{C69707B3-FD22-4BAA-A273-A02728E02567}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C69707B3-FD22-4BAA-A273-A02728E02567}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C69707B3-FD22-4BAA-A273-A02728E02567}.Release|Any CPU.Build.0 = Release|Any CPU
+		{72592C4D-7A1A-4779-B16B-F9A023933F44}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{72592C4D-7A1A-4779-B16B-F9A023933F44}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{72592C4D-7A1A-4779-B16B-F9A023933F44}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{72592C4D-7A1A-4779-B16B-F9A023933F44}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
