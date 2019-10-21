@@ -25,8 +25,7 @@ A word identifies a function defined in the program embedding the language. Ther
 "<...>"                string literal
 '<...>'                also string literal
 &<name>                variable reference
-<name>=                variable setting
-"C" <statement> "D"    inline statement
+"IN" <statement> "."   inline statement
 ````
 
 You can use a statement comprised of a string literal as a comment.
@@ -39,7 +38,9 @@ The interpreter automatically generates conversion functions: `<output type>.fro
 ### Example
 ````
 print "Hello world" .
-print C string.concat "Hello" "world" D .
+print IN string.concat "Hello" "world" . .
+                                      " ^ There are two dots because the first " .
+                                      "   one terminates the inline statement  " .
 int.mul 5 10 , int.toString , concat " = 25" , print .
 "^ Prints 25 = 25" .
 ````
