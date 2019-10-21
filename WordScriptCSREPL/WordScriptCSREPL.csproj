@@ -50,9 +50,9 @@
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\WordScript\WordScript.csproj">
+    <ProjectReference Include="..\WordScriptCS\WordScriptCS.csproj">
       <Project>{a9ccf180-41fd-48e0-9200-86a61d91fd07}</Project>
-      <Name>WordScript</Name>
+      <Name>WordScriptCS</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
