@@ -67,7 +67,7 @@ namespace WordScriptTests {
 
 			[TypeConversion]
 			public static int ToInt(TestClass inp) => inp.testValue;
-			
+
 			[TypeConversion]
 			public static TestClass FromInt(int inp) => new TestClass { testValue = inp };
 		}
@@ -83,6 +83,12 @@ namespace WordScriptTests {
 			Assert.AreEqual(overloads.Count, 1, "Function signature not found, error in GetOverloads or [TypeConversion]");
 			var function = provider.GetFunction(overloads[0]);
 			Assert.AreEqual(function.returnType, typeof(TestClass), "Function return value is not correct. Either a different overload is registered or error");
+		}
+
+		[TestMethod]
+		public void Tokenizing() {
+			var tokens = CodeTokenizer.Tokenize("print IN string.concat \"Hello\" \"world\" . .\n  int.mul 5 10 , int.toString , concat \" = 25\" , printn .");
+			Assert.AreEqual(tokens.Count, 18);
 		}
 	}
 }
