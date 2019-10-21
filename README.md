@@ -21,12 +21,12 @@ int.mul 5 10 | int.add 4
 
 A word identifies a function defined in the program embedding the language. There are special words meaning other things.
 ````
-<digit [...]>      number literal
-"<...>"            string literal
-'<...>'            also string literal
-&<name>            variable reference
-<name>=            variable setting
-(<statement>)      expression
+<digit [...]>          number literal
+"<...>"                string literal
+'<...>'                also string literal
+&<name>                variable reference
+<name>=                variable setting
+"C" <statement> "D"    inline statement
 ````
 
 You can use a statement comprised of a string literal as a comment.
@@ -39,7 +39,7 @@ The interpreter automatically generates conversion functions: `<output type>.fro
 ### Example
 ````
 print "Hello world"
-print (string.concat "Hello" "world")
+print C string.concat "Hello" "world" D
 int.mul 5 10 | int.toString | concat " = 25" | print
 "^ Prints 25 = 25"
 ````
