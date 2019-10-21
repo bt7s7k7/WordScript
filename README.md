@@ -34,7 +34,7 @@ You can use a statement comprised of a string literal as a comment.
 "This is a comment, since it's a literal that is not a argument, it doesn't do anything"
 ````
 
-The interpreter automatically generates conversion functions: ˙<input type>.convert.<output type>˙ or `<input type>.toString`
+The interpreter automatically generates conversion functions: `<output type>.from <input type>`
 
 ### Example
 ````
