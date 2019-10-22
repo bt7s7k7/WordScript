@@ -409,7 +409,7 @@ namespace WordScript {
 						} else {
 							ret = new SyntaxNodeTypes.Literal<int>(int.Parse(currentToken.text), currentToken.position);
 						}
-					} catch (FormatException ex) {
+					} catch (FormatException) {
 						throw new NumberLiteralException("Number is not of correct format " + currentToken.position);
 					}
 				} else {
