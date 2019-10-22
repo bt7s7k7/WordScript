@@ -90,5 +90,11 @@ namespace WordScriptTests {
 			var tokens = CodeTokenizer.Tokenize("print IN string.concat \"Hello\" \"world\" . .\n  int.mul 5 10 , int.toString , concat \" = 25\" , printn .");
 			Assert.AreEqual(tokens.Count, 18);
 		}
+
+		[TestMethod]
+		public void Parsing() {
+			var statements = TokenParser.Parse("\"Comment\" .\nprint 25 .\nprint IN string.concat \"Hello\" \"world\" . .\n  int.mul 5 10 , int.toString , concat \" = 25\" , printn .");
+			Assert.AreEqual(statements.Count, 4);
+		}
 	}
 }

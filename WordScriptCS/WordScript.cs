@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Linq;
 using System.Collections;
+using System.Text;
 
 namespace WordScript {
 	[AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
@@ -26,7 +27,7 @@ namespace WordScript {
 		}
 	}
 
-	public struct Function {
+	public class Function {
 		public Func<object[], object> function;
 		public Type returnType;
 		public Type[] arguments;
@@ -35,7 +36,17 @@ namespace WordScript {
 
 
 	[Serializable]
-	public class TypeNotRegisteredException : Exception {
+	public class WordScriptException : Exception {
+		public WordScriptException() { }
+		public WordScriptException(string message) : base(message) { }
+		public WordScriptException(string message, Exception inner) : base(message, inner) { }
+		protected WordScriptException(
+		  System.Runtime.Serialization.SerializationInfo info,
+		  System.Runtime.Serialization.StreamingContext context) : base(info, context) { }
+	}
+
+	[Serializable]
+	public class TypeNotRegisteredException : WordScriptException {
 		public TypeNotRegisteredException() { }
 		public TypeNotRegisteredException(string message) : base(message) { }
 		public TypeNotRegisteredException(string message, Exception inner) : base(message, inner) { }
@@ -46,7 +57,7 @@ namespace WordScript {
 
 
 	[Serializable]
-	public class FunctionNotFoundException : Exception {
+	public class FunctionNotFoundException : WordScriptException {
 		public FunctionNotFoundException() { }
 		public FunctionNotFoundException(string message) : base(message) { }
 		public FunctionNotFoundException(string message, Exception inner) : base(message, inner) { }
@@ -56,7 +67,7 @@ namespace WordScript {
 	}
 
 	[Serializable]
-	public class TokenizationException : Exception {
+	public class TokenizationException : WordScriptException {
 		public TokenizationException() { }
 		public TokenizationException(string message) : base(message) { }
 		public TokenizationException(string message, Exception inner) : base(message, inner) { }
@@ -81,6 +92,17 @@ namespace WordScript {
 		public UnknownEscapeCharacterException(string message) : base(message) { }
 		public UnknownEscapeCharacterException(string message, Exception inner) : base(message, inner) { }
 		protected UnknownEscapeCharacterException(
+		  System.Runtime.Serialization.SerializationInfo info,
+		  System.Runtime.Serialization.StreamingContext context) : base(info, context) { }
+	}
+
+
+	[Serializable]
+	public class UnexpectedTokenException : Exception {
+		public UnexpectedTokenException() { }
+		public UnexpectedTokenException(string message) : base(message) { }
+		public UnexpectedTokenException(string message, Exception inner) : base(message, inner) { }
+		protected UnexpectedTokenException(
 		  System.Runtime.Serialization.SerializationInfo info,
 		  System.Runtime.Serialization.StreamingContext context) : base(info, context) { }
 	}
@@ -327,6 +349,174 @@ namespace WordScript {
 
 			return ret;
 
+		}
+	}
+
+	public class TokenParser {
+
+		public static SyntaxNode ParseStatement(ref IEnumerator<CodeTokenizer.Token> enumerator, bool isArgument, SyntaxNode piped = null) {
+			SyntaxNode ret = null;
+			SyntaxNodeTypes.Statement statement = null;
+			CodeTokenizer.Token currentToken = enumerator.Current;
+			if (
+				currentToken.type == CodeTokenizer.Token.Type.Terminator
+				|| currentToken.type == CodeTokenizer.Token.Type.Pipe
+			) {
+				throw new UnexpectedTokenException("Expected statement, unexpected " + currentToken.ToString());
+			} else if (currentToken.type == CodeTokenizer.Token.Type.Inline) { 
+				// If inline, parse the inline statement and return it
+				if (!isArgument) throw new UnexpectedTokenException("Expected statement start, unexpected " + currentToken.position.ToString());
+				// Move next to the start of the inline statement
+				if (!enumerator.MoveNext()) throw new EndOfFileException("Unexpected end of file, expected statement " + currentToken.position.ToString());
+				return ParseStatement(ref  enumerator, false);
+			} else if (currentToken.type == CodeTokenizer.Token.Type.StringLiteral) {
+				if (piped != null) throw new UnexpectedTokenException("Cannot pipe into a string " + currentToken.position.ToString());
+				ret = new SyntaxNodeTypes.Literal<string>(currentToken.text, currentToken.position);
+			} else if (currentToken.type == CodeTokenizer.Token.Type.Word) {
+				if (char.IsDigit(currentToken.text[0])) {
+					if (piped != null) throw new UnexpectedTokenException("Cannot pipe into a number " + currentToken.position.ToString());
+					var value = float.Parse(currentToken.text);
+					ret = new SyntaxNodeTypes.Literal<float>(value, currentToken.position);
+				} else {
+					statement = new SyntaxNodeTypes.Statement(currentToken.position);
+					ret = statement;
+				}
+			}
+
+			if (isArgument) {
+				if (statement != null) statement.Validate();
+				return ret;
+			}
+
+			if (piped != null) {
+				if (statement != null) {
+					statement.children.Add(piped);
+				} else {
+					throw new UnexpectedTokenException("Unexpected literal, expected a statement to pipe into " + currentToken.position.ToString());
+				}
+			}
+
+			while (true) {
+				{
+					var lastPos = enumerator.Current.position;
+					if (!enumerator.MoveNext()) {
+						throw new EndOfFileException("Unexpected end of file, expected a argument, if statement end expected terminator" + lastPos);
+					}
+				}
+
+				var current = enumerator.Current;
+				if (current.type == CodeTokenizer.Token.Type.Terminator) {
+					if (statement != null) statement.Validate();
+					return ret;
+				} else if (current.type == CodeTokenizer.Token.Type.Pipe) {
+					if (statement != null) statement.Validate();
+					var lastPos = enumerator.Current.position;
+					if (!enumerator.MoveNext()) {
+						throw new EndOfFileException("Unexpected end of file, expected a statement to pipe into" + lastPos);
+					}
+					return ParseStatement(ref enumerator, false, ret);
+				} else {
+					if (statement != null) {
+						statement.children.Add(ParseStatement(ref enumerator, true));
+					} else {
+						throw new UnexpectedTokenException("Unexpected argument, expected a terminator " + current.position);
+					}
+				}
+			}
+		}
+
+		public static List<SyntaxNode> Parse(List<CodeTokenizer.Token> tokens) {
+			var ret = new List<SyntaxNode>();
+			IEnumerator<CodeTokenizer.Token> enumerator = tokens.GetEnumerator();
+
+			while (enumerator.MoveNext()) {
+				ret.Add(ParseStatement(ref enumerator,false));
+			}
+
+			return ret;
+		}
+
+		public static List<SyntaxNode> Parse(string text) {
+			return Parse(CodeTokenizer.Tokenize(text));
+		}
+	}
+
+	public abstract class SyntaxNode {
+		public abstract object Evaluate();
+		public abstract Type GetReturnType();
+
+		public abstract void GetDebug(Action<string> write, ref int indent);
+
+		public string Debug() {
+			StringBuilder builder = new StringBuilder();
+			int indent = 0;
+			GetDebug((s) => {
+				builder.Append(new string(' ', indent * 2));
+				builder.Append(s);
+				builder.Append("\n");
+			}, ref indent);
+
+			return builder.ToString();
+		}
+
+		public CodePosition position;
+	}
+
+	namespace SyntaxNodeTypes {
+		public class Statement : SyntaxNode {
+			public List<SyntaxNode> children = new List<SyntaxNode>();
+			public Function function = null;
+
+			public Statement(CodePosition position) {
+				this.position = position;
+			}
+
+			public override object Evaluate() {
+				return null;
+			}
+
+			public override Type GetReturnType() {
+				return typeof(void);
+			}
+
+			public void Validate() {
+				
+			}
+
+			public override string ToString() {
+				return base.ToString() + "[" + children.Count + "]";
+			}
+
+			public override void GetDebug(Action<string> write, ref int indent) {
+				write("Statment[" + children.Count + "] = {");
+				indent++;
+				foreach (var child in children) {
+					child.GetDebug(write, ref indent);
+				}
+				indent--;
+				write("}");
+			}
+		}
+
+		public class Literal<T> : SyntaxNode {
+			public T value;
+
+			public Literal(T value, CodePosition position) {
+				this.value = value;
+				this.position = position;
+			}
+
+			public override object Evaluate() {
+				return value;
+			}
+
+			public override Type GetReturnType() {
+				return typeof(T);
+			}
+
+			public override void GetDebug(Action<string> write, ref int indent) {
+				write(typeof(T).FullName + " " + value.ToString());
+			}
 		}
 	}
 

@@ -25,14 +25,23 @@ namespace WordScriptREPL {
 
 		static void Run(string code) {
 			List<CodeTokenizer.Token> tokens = null;
+			List<SyntaxNode> nodes = null;
 			try {
 				tokens = CodeTokenizer.Tokenize(code,file);
+				nodes = TokenParser.Parse(tokens);
 			} catch (Exception ex) {
+				Console.WriteLine(ex.Message);
 				Console.WriteLine(ex.StackTrace);
 			}
 			if (tokens != null) {
 				foreach (var token in tokens) {
 					Console.WriteLine(token.ToString());
+				}
+			}
+			Console.WriteLine("");
+			if (nodes != null) {
+				foreach (var node in nodes) {
+					Console.WriteLine(node.Debug());
 				}
 			}
 		}
