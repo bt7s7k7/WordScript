@@ -255,7 +255,7 @@ namespace WordScript {
 				Word,
 				Pipe,
 				Terminator,
-				Inline,
+				Keyword,
 				StringLiteral
 			}
 
@@ -266,7 +266,7 @@ namespace WordScript {
 			public static Token MakeTerminator(string text, CodePosition position) => new Token { text = text, type = Type.Terminator, position = position };
 			public static Token MakePipe(string text, CodePosition position) => new Token { text = text, type = Type.Pipe, position = position };
 			public static Token MakeWord(string text, CodePosition position) => new Token { text = text, type = Type.Word, position = position };
-			public static Token MakeInline(string text, CodePosition position) => new Token { text = text, type = Type.Inline, position = position };
+			public static Token MakeKeyword(string text, CodePosition position) => new Token { text = text, type = Type.Keyword, position = position };
 			public static Token MakeStringLiteral(string text, CodePosition position) => new Token { text = text, type = Type.StringLiteral, position = position };
 
 			public override string ToString() {
@@ -361,8 +361,8 @@ namespace WordScript {
 					ret.Add(Token.MakeTerminator(word, codePosition));
 				} else if (word == ",") {
 					ret.Add(Token.MakePipe(word, codePosition));
-				} else if (word == "IN") {
-					ret.Add(Token.MakeInline(word, codePosition));
+				} else if (word.Where(v => char.IsLetter(v) && char.ToUpper(v) == v).Count() == word.Length) {
+					ret.Add(Token.MakeKeyword(word, codePosition));
 				} else if (isString) {
 					ret.Add(Token.MakeStringLiteral(word, codePosition));
 				} else {
@@ -386,12 +386,16 @@ namespace WordScript {
 				|| currentToken.type == CodeTokenizer.Token.Type.Pipe
 			) {
 				throw new UnexpectedTokenException("Expected statement, unexpected " + currentToken.ToString());
-			} else if (currentToken.type == CodeTokenizer.Token.Type.Inline) {
-				// If inline, parse the inline statement and return it
-				if (!isArgument) throw new UnexpectedTokenException("Expected statement start, unexpected " + currentToken.position.ToString());
-				// Move next to the start of the inline statement
-				if (!enumerator.MoveNext()) throw new EndOfFileException("Unexpected end of file, expected statement " + currentToken.position.ToString());
-				return ParseStatement(ref enumerator, false);
+			} else if (currentToken.type == CodeTokenizer.Token.Type.Keyword) {
+				if (currentToken.text == "IN") {
+					// If inline, parse the inline statement and return it
+					if (!isArgument) throw new UnexpectedTokenException("Expected statement start, unexpected " + currentToken.position.ToString());
+					// Move next to the start of the inline statement
+					if (!enumerator.MoveNext()) throw new EndOfFileException("Unexpected end of file, expected statement " + currentToken.position.ToString());
+					return ParseStatement(ref enumerator, false);
+				} else {
+					throw new FunctionNotFoundException("Keyword unknown " + currentToken.ToString());
+				}
 			} else if (currentToken.type == CodeTokenizer.Token.Type.StringLiteral) {
 				if (piped != null) throw new UnexpectedTokenException("Cannot pipe into a string " + currentToken.position.ToString());
 				ret = new SyntaxNodeTypes.Literal<string>(currentToken.text, currentToken.position);
