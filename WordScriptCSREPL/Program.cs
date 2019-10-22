@@ -31,7 +31,6 @@ namespace WordScriptREPL {
 				nodes = TokenParser.Parse(tokens);
 			} catch (WordScriptException ex) {
 				Console.WriteLine(ex.Message);
-				Console.WriteLine(ex.StackTrace);
 			}
 			if (tokens != null) {
 				foreach (var token in tokens) {

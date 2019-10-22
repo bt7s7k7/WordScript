@@ -98,11 +98,22 @@ namespace WordScript {
 
 
 	[Serializable]
-	public class UnexpectedTokenException : Exception {
+	public class UnexpectedTokenException : WordScriptException {
 		public UnexpectedTokenException() { }
 		public UnexpectedTokenException(string message) : base(message) { }
 		public UnexpectedTokenException(string message, Exception inner) : base(message, inner) { }
 		protected UnexpectedTokenException(
+		  System.Runtime.Serialization.SerializationInfo info,
+		  System.Runtime.Serialization.StreamingContext context) : base(info, context) { }
+	}
+
+
+	[Serializable]
+	public class NumberLiteralException : WordScriptException {
+		public NumberLiteralException() { }
+		public NumberLiteralException(string message) : base(message) { }
+		public NumberLiteralException(string message, Exception inner) : base(message, inner) { }
+		protected NumberLiteralException(
 		  System.Runtime.Serialization.SerializationInfo info,
 		  System.Runtime.Serialization.StreamingContext context) : base(info, context) { }
 	}
@@ -127,15 +138,15 @@ namespace WordScript {
 			AddOverload(func.name, signature);
 		}
 
-		public string GetFunctionSignature(string name, Type[] arguments) {
-			return name + " " + string.Join(" ", arguments.Select(v => names[v]));
+		public string GetFunctionSignature(string name, IEnumerable<Type> arguments) {
+			return name + " " + string.Join(" ", arguments.Select(v => GetTypeName(v)));
 		}
 
 		public string GetTypeName(Type type) {
 			if (names.TryGetValue(type, out string name)) {
 				return name;
 			} else {
-				throw new TypeNotRegisteredException("Type " + name + " is not registered");
+				throw new TypeNotRegisteredException("Type " + type.FullName + " is not registered");
 			}
 		}
 
@@ -208,6 +219,15 @@ namespace WordScript {
 
 		[TypeName(typeof(int))]
 		public static string GetIntName() => "int";
+
+		[TypeName(typeof(float))]
+		public static string GetFloatName() => "float";
+
+		[TypeConversion]
+		public static string IntToString(int v) => v.ToString();
+
+		[TypeConversion]
+		public static string FloatToString(float v) => v.ToString();
 	}
 
 	public struct CodePosition {
@@ -366,20 +386,32 @@ namespace WordScript {
 				|| currentToken.type == CodeTokenizer.Token.Type.Pipe
 			) {
 				throw new UnexpectedTokenException("Expected statement, unexpected " + currentToken.ToString());
-			} else if (currentToken.type == CodeTokenizer.Token.Type.Inline) { 
+			} else if (currentToken.type == CodeTokenizer.Token.Type.Inline) {
 				// If inline, parse the inline statement and return it
 				if (!isArgument) throw new UnexpectedTokenException("Expected statement start, unexpected " + currentToken.position.ToString());
 				// Move next to the start of the inline statement
 				if (!enumerator.MoveNext()) throw new EndOfFileException("Unexpected end of file, expected statement " + currentToken.position.ToString());
-				return ParseStatement(ref  enumerator, false);
+				return ParseStatement(ref enumerator, false);
 			} else if (currentToken.type == CodeTokenizer.Token.Type.StringLiteral) {
 				if (piped != null) throw new UnexpectedTokenException("Cannot pipe into a string " + currentToken.position.ToString());
 				ret = new SyntaxNodeTypes.Literal<string>(currentToken.text, currentToken.position);
 			} else if (currentToken.type == CodeTokenizer.Token.Type.Word) {
 				if (char.IsDigit(currentToken.text[0])) {
 					if (piped != null) throw new UnexpectedTokenException("Cannot pipe into a number " + currentToken.position.ToString());
-					var value = float.Parse(currentToken.text);
-					ret = new SyntaxNodeTypes.Literal<float>(value, currentToken.position);
+					var last = currentToken.text[currentToken.text.Length - 1];
+					try {
+						if (!char.IsDigit(last)) {
+							if (last == 'i') {
+								ret = new SyntaxNodeTypes.Literal<int>(int.Parse(currentToken.text), currentToken.position);
+							} else if (last == 'f') {
+								ret = new SyntaxNodeTypes.Literal<float>(float.Parse(currentToken.text), currentToken.position);
+							} else throw new NumberLiteralException("Unknown number type '" + last + "' " + currentToken.position);
+						} else {
+							ret = new SyntaxNodeTypes.Literal<int>(int.Parse(currentToken.text), currentToken.position);
+						}
+					} catch (FormatException ex) {
+						throw new NumberLiteralException("Number is not of correct format " + currentToken.position);
+					}
 				} else {
 					statement = new SyntaxNodeTypes.Statement(currentToken.position);
 					ret = statement;
@@ -387,7 +419,7 @@ namespace WordScript {
 			}
 
 			if (isArgument) {
-				if (statement != null) statement.Validate();
+				if (statement != null) statement.Validate(currentToken.text);
 				return ret;
 			}
 
@@ -409,10 +441,10 @@ namespace WordScript {
 
 				var current = enumerator.Current;
 				if (current.type == CodeTokenizer.Token.Type.Terminator) {
-					if (statement != null) statement.Validate();
+					if (statement != null) statement.Validate(currentToken.text);
 					return ret;
 				} else if (current.type == CodeTokenizer.Token.Type.Pipe) {
-					if (statement != null) statement.Validate();
+					if (statement != null) statement.Validate(currentToken.text);
 					var lastPos = enumerator.Current.position;
 					if (!enumerator.MoveNext()) {
 						throw new EndOfFileException("Unexpected end of file, expected a statement to pipe into" + lastPos);
@@ -433,7 +465,7 @@ namespace WordScript {
 			IEnumerator<CodeTokenizer.Token> enumerator = tokens.GetEnumerator();
 
 			while (enumerator.MoveNext()) {
-				ret.Add(ParseStatement(ref enumerator,false));
+				ret.Add(ParseStatement(ref enumerator, false));
 			}
 
 			return ret;
@@ -475,15 +507,28 @@ namespace WordScript {
 			}
 
 			public override object Evaluate() {
-				return null;
+				if (function == null) {
+					throw new Exception("Statement not validated yet");
+				} else {
+					throw new NotImplementedException("Evaluation not yet implemented");
+				}
 			}
 
 			public override Type GetReturnType() {
-				return typeof(void);
+				return function?.returnType ?? throw new Exception("Statement not validated yet");
 			}
 
-			public void Validate() {
-				
+			public void Validate(string name) {
+				if (function != null) throw new Exception("Tryied to validate a validated statement");
+				var provider = new TypeInfoProvider();
+				var overloads = provider.GetOverloads(name);
+				var signature = provider.GetFunctionSignature(name, children.Select(v => v.GetReturnType()));
+				var signIndex = overloads.IndexOf(signature);
+				if (signIndex == -1) {
+					throw new FunctionNotFoundException("Function not found \"" + signature + "\"" + position.ToString() + ", posible overloads: {\n  " + string.Join(", \n  ", overloads) + "\n}");
+				} else {
+					function = provider.GetFunction(signature);
+				}
 			}
 
 			public override string ToString() {
