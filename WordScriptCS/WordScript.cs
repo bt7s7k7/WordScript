@@ -267,6 +267,7 @@ namespace WordScript {
 				int startPos = position;
 				bool isOver = false;
 				bool isString = false;
+				StringBuilder stringBuilder = null;
 				if (char.IsWhiteSpace(code[position])) {
 					position++;
 					codePosition.NextLetter();
@@ -282,25 +283,27 @@ namespace WordScript {
 					position++;
 					codePosition.NextLetter();
 					bool isEscape = false;
-					System.Text.StringBuilder stringBuilder = new System.Text.StringBuilder();
+					stringBuilder = new System.Text.StringBuilder();
 					while (true) {
 						if (position >= code.Length) {
-							throw new EndOfFileException("Unexpected end of file " + codePosition.ToString());
+							throw new EndOfFileException("Unexpected end of file, expected string literal end " + codePosition.ToString());
 						};
 
 						if (isEscape) {
 							if (code[position] == 'n') stringBuilder.Append("\n");
-							if (code[position] == '\\') stringBuilder.Append("\\");
-							if (code[position] == 'b') stringBuilder.Append("\b");
-							if (code[position] == 'r') stringBuilder.Append("\r");
-							if (code[position] == '\'') stringBuilder.Append("'");
-							if (code[position] == '"') stringBuilder.Append("\"");
+							else if (code[position] == '\\') stringBuilder.Append("\\");
+							else if (code[position] == 'b') stringBuilder.Append("\b");
+							else if (code[position] == 'r') stringBuilder.Append("\r");
+							else if (code[position] == '\'') stringBuilder.Append("'");
+							else if (code[position] == '"') stringBuilder.Append("\"");
 							else throw new UnknownEscapeCharacterException("Unknown escape character \\" + code[position]);
+
+							isEscape = false;
 						} else {
 							if (code[position] == '\\') {
 								isEscape = true;
 								stringBuilder.Append(code, startPos, position - startPos);
-								startPos = position;
+								startPos = position + 2;
 							} else if (code[position] == (startedWithAp ? '\'' : '"')) {
 								stringBuilder.Append(code, startPos, position - startPos);
 								position++;
@@ -328,11 +331,11 @@ namespace WordScript {
 					}
 				}
 
-				string word = code.Substring(startPos, position - startPos);
+				string word = stringBuilder?.ToString() ?? code.Substring(startPos, position - startPos);
 				if (!isString) {
 					word = word.Trim();
 					if (word.Length == 0) continue;
-				} else word = word.Substring(1, word.Length - 2);
+				} else word = word.Substring(1);
 
 				if (word == ".") {
 					ret.Add(Token.MakeTerminator(word, codePosition));

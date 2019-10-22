@@ -29,7 +29,7 @@ namespace WordScriptREPL {
 			try {
 				tokens = CodeTokenizer.Tokenize(code,file);
 				nodes = TokenParser.Parse(tokens);
-			} catch (Exception ex) {
+			} catch (WordScriptException ex) {
 				Console.WriteLine(ex.Message);
 				Console.WriteLine(ex.StackTrace);
 			}
