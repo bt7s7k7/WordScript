@@ -435,7 +435,7 @@ namespace WordScript {
 				{
 					var lastPos = enumerator.Current.position;
 					if (!enumerator.MoveNext()) {
-						throw new EndOfFileException("Unexpected end of file, expected a argument, if statement end expected terminator" + lastPos);
+						throw new EndOfFileException("Unexpected end of file, expected a argument, if statement end expected terminator " + lastPos);
 					}
 				}
 
@@ -447,7 +447,7 @@ namespace WordScript {
 					if (statement != null) statement.Validate(currentToken.text);
 					var lastPos = enumerator.Current.position;
 					if (!enumerator.MoveNext()) {
-						throw new EndOfFileException("Unexpected end of file, expected a statement to pipe into" + lastPos);
+						throw new EndOfFileException("Unexpected end of file, expected a statement to pipe into " + lastPos);
 					}
 					return ParseStatement(ref enumerator, false, ret);
 				} else {
