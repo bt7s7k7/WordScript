@@ -179,7 +179,9 @@ namespace WordScript {
 		}
 
 		public string GetTypeName(Type type) {
-			if (names.TryGetValue(type, out string name)) {
+			if (type.IsGenericType && !type.IsGenericTypeDefinition) {
+				return GetTypeName(type.GetGenericTypeDefinition()) + "!" + string.Join("!", type.GetGenericArguments().Select(v=>GetTypeName(v)));
+			} else if (names.TryGetValue(type, out string name)) {
 				return name;
 			} else {
 				throw new TypeNotRegisteredException("Type " + type.FullName + " is not registered");
@@ -264,8 +266,15 @@ namespace WordScript {
 
 		public Type GetTypeByName(string name) {
 			var retCan = names.Where(v => v.Value == name).Select(v => v.Key);
-			if (retCan.Count() < 1) throw new TypeNotRegisteredException("There is no type registered for name " + name);
-			else return retCan.First();
+			if (retCan.Count() < 1) { 
+				if (name.Contains('!')) {
+					var ss = name.Split('!');
+					var generic = GetTypeByName(ss.First());
+					var arguments = ss.Skip(1).Select(v=>GetTypeByName(v));
+					return generic.MakeGenericType(arguments.ToArray());
+				}
+				else throw new TypeNotRegisteredException("There is no type registered for name " + name);
+			} else return retCan.First();
 		}
 
 		/// <summary>
@@ -296,6 +305,9 @@ namespace WordScript {
 
 		[TypeName(typeof(float))]
 		public static string GetFloatName() => "float";
+
+		[TypeName(typeof(FlowControllWrapper<>))]
+		public static string GetFCWName() => "fcw";
 
 		[TypeConversion(isStandard = true)]
 		public static string IntToString(int v) => v.ToString();
@@ -639,6 +651,21 @@ namespace WordScript {
 		public CodePosition position;
 	}
 
+	public struct FlowControllWrapper<T> {
+		public enum Type {
+			None,
+			Return
+		}
+
+		public Type type;
+		public T value;
+
+		public FlowControllWrapper(Type type, T value) {
+			this.type = type;
+			this.value = value;
+		}
+	}
+
 	namespace SyntaxNodeTypes {
 		public class Statement : SyntaxNode {
 			public List<SyntaxNode> children = new List<SyntaxNode>();
@@ -665,7 +692,18 @@ namespace WordScript {
 			}
 
 			public void Validate(string name, Enviroment enviroment) {
-				if (name[0] == '&') {
+				if (name == "return") {
+					if (children.Count != 1) throw new FunctionNotFoundException("Return statement can must one argument" + position.ToString());
+
+					Type childType = children[0].GetReturnType();
+					Type returnType = typeof(FlowControllWrapper<>).MakeGenericType(children[0].GetReturnType());
+					function = new Function {
+						arguments = new Type[] { childType },
+						function = (v) => returnType.GetConstructor(new Type[] { typeof(FlowControllWrapper<>.Type), returnType }).Invoke(FlowControllWrapper<int>.Type.Return, v),
+						name = name,
+						returnType = returnType
+					};
+				} else if (name[0] == '&') {
 					if (children.Count != 0) throw new FunctionNotFoundException("You cannot call variable query with any arguments " + position.ToString());
 					variable = enviroment.GetVariable(name.Substring(1)) ?? throw new FunctionNotFoundException("Failed to get variable " + name.Substring(1) + " " + position.ToString()); ;
 				} else if (name[name.Length - 1] == '=') {
@@ -795,7 +833,9 @@ namespace WordScript {
 		protected List<SyntaxNode> nodes = new List<SyntaxNode>();
 		protected Scope scope;
 		public readonly CodePosition position;
+		protected Type retType = null;
 		public Scope Scope => scope;
+		public Type ReturnType => retType;
 
 		public void AppendSyntaxNode(SyntaxNode node) => nodes.Add(node);
 
@@ -804,7 +844,46 @@ namespace WordScript {
 			this.position = position;
 		}
 
+		public void Validate(Enviroment enviroment) {
+			foreach (var node in nodes) {
+				var returnType = node.GetReturnType();
+				if (returnType.IsConstructedGenericType && returnType.GetGenericTypeDefinition() == typeof(FlowControllWrapper<>)) {
+					if (retType == null) retType = returnType.GetGenericArguments()[0];
+					if (returnType.GetGenericArguments()[0] != retType) throw new ReturnTypeException("Return statement is not of type " + enviroment.provider.GetTypeName(retType) + " " + node.position.ToString());
+				}
+			}
+		}
+
+		public object Evaluate() {
+			if (nodes.Count == 1 && retType == null) return nodes[0].Evaluate();
+
+			foreach (var node in nodes) {
+				var res = node.Evaluate();
+				var resType = res.GetType();
+				if (resType.IsGenericType && resType.GetGenericTypeDefinition() == typeof(FlowControllWrapper<>)) {
+					return res;
+				}
+			}
+
+			return null;
+		}
+
 		public List<SyntaxNode> GetSyntaxNodes() => nodes;
+	}
+
+	[Serializable]
+	public class ReturnTypeException : WordScriptException {
+		public ReturnTypeException() {
+		}
+
+		public ReturnTypeException(string message) : base(message) {
+		}
+
+		public ReturnTypeException(string message, Exception innerException) : base(message, innerException) {
+		}
+
+		protected ReturnTypeException(SerializationInfo info, StreamingContext context) : base(info, context) {
+		}
 	}
 
 	public class Enviroment {

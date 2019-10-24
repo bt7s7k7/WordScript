@@ -80,6 +80,11 @@ namespace WordScript.Tests {
 
 			[TypeConversion]
 			public static TestClass FromInt(int inp) => new TestClass { testValue = inp };
+
+			[TypeName(typeof(TestGenericClass<>))]
+			public static string TestGenericName() => "TestGenericClass";
+			[TypeConversion]
+			public static TestGenericClass<int> TestGenericFromInt(int i) => new TestGenericClass<int>();
 		}
 
 		[TestMethod]
@@ -206,6 +211,46 @@ namespace WordScript.Tests {
 			Enviroment enviroment = new Enviroment(provider);
 			var block = TokenParser.Parse("int 0f .", enviroment, CodePosition.GetExternal());
 			Assert.AreEqual(block.position, CodePosition.GetExternal());
+		}
+
+		public class TestGenericClass<T> {
+			
+
+		}
+
+		[TestMethod]
+		public void GenericTypeNames() {
+			Assert.AreEqual(provider.GetTypeName(typeof(TestGenericClass<int>)), "TestGenericClass!int");
+		}
+
+		[TestMethod]
+		public void GenericTypesFromName() {
+			Assert.AreEqual(provider.GetTypeByName("TestGenericClass!string"), typeof(TestGenericClass<string>));
+		}
+
+		[TestMethod]
+		public void ReturningFromBlock() {
+			Enviroment enviroment = new Enviroment(provider);
+			var block = TokenParser.Parse("return 10 .", enviroment, CodePosition.GetExternal());
+			block.Validate(enviroment);
+			Assert.AreEqual(block.ReturnType, typeof(int));
+		}
+		
+		[TestMethod]
+		public void ReturningFromBlockMultiple() {
+			Enviroment enviroment = new Enviroment(provider);
+			var block = TokenParser.Parse("return 10 . return 15 .", enviroment, CodePosition.GetExternal());
+			block.Validate(enviroment);
+			Assert.AreEqual(block.ReturnType, typeof(int));
+		}
+		
+		[TestMethod]
+		[ExpectedException(typeof(ReturnTypeException))]
+		public void ReturningFromBlockMismatchDetect() {
+			Enviroment enviroment = new Enviroment(provider);
+			var block = TokenParser.Parse("return 10 . return 1f .", enviroment, CodePosition.GetExternal());
+			block.Validate(enviroment);
+			Assert.AreEqual(block.ReturnType, typeof(int));
 		}
 	}
 }
