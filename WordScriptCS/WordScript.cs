@@ -5,6 +5,7 @@ using System.Linq;
 using System.Collections;
 using System.Text;
 using System.Globalization;
+using System.Runtime.Serialization;
 
 namespace WordScript {
 	[AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
@@ -184,7 +185,7 @@ namespace WordScript {
 				throw new TypeNotRegisteredException("Type " + type.FullName + " is not registered");
 			}
 		}
-			
+
 		/// <summary>
 		/// Finds a function with the signature. If no found throw <see cref="FunctionNotFoundException"></see>
 		/// </summary>
@@ -544,9 +545,9 @@ namespace WordScript {
 					try {
 						if (!char.IsDigit(last)) {
 							if (last == 'i') {
-								ret = new SyntaxNodeTypes.Literal<int>(int.Parse(currentToken.text), currentToken.position);
+								ret = new SyntaxNodeTypes.Literal<int>(int.Parse(currentToken.text.Substring(0, currentToken.text.Length - 1)), currentToken.position);
 							} else if (last == 'f') {
-								ret = new SyntaxNodeTypes.Literal<float>(float.Parse(currentToken.text, CultureInfo.InvariantCulture), currentToken.position);
+								ret = new SyntaxNodeTypes.Literal<float>(float.Parse(currentToken.text.Substring(0, currentToken.text.Length - 1), CultureInfo.InvariantCulture), currentToken.position);
 							} else throw new NumberLiteralException("Unknown number type '" + last + "' " + currentToken.position);
 						} else {
 							ret = new SyntaxNodeTypes.Literal<int>(int.Parse(currentToken.text), currentToken.position);
@@ -602,15 +603,19 @@ namespace WordScript {
 			}
 		}
 
-		public static void Parse(List<CodeTokenizer.Token> tokens, Enviroment enviroment) {
+		public static StatementBlock Parse(List<CodeTokenizer.Token> tokens, Enviroment enviroment, CodePosition position, bool inline = false) {
 			IEnumerator<CodeTokenizer.Token> enumerator = tokens.GetEnumerator();
+
+			if (!inline) enviroment.StartBlock(position);
 
 			while (enumerator.MoveNext()) {
 				enviroment.AppendSyntaxNode(ParseStatement(ref enumerator, enviroment, false));
 			}
+
+			return inline ? null : enviroment.EndBlock();
 		}
 
-		public static void Parse(string text, Enviroment enviroment) => Parse(CodeTokenizer.Tokenize(text), enviroment);
+		public static StatementBlock Parse(string text, Enviroment enviroment, CodePosition position, bool inline = false) => Parse(CodeTokenizer.Tokenize(text), enviroment, position, inline);
 	}
 
 	public abstract class SyntaxNode {
@@ -662,10 +667,10 @@ namespace WordScript {
 			public void Validate(string name, Enviroment enviroment) {
 				if (name[0] == '&') {
 					if (children.Count != 0) throw new FunctionNotFoundException("You cannot call variable query with any arguments " + position.ToString());
-					variable = enviroment.GetVariable(name.Substring(1), position) ?? throw new FunctionNotFoundException("Failed to get variable " + name.Substring(1) + " " + position.ToString()); ;
+					variable = enviroment.GetVariable(name.Substring(1)) ?? throw new FunctionNotFoundException("Failed to get variable " + name.Substring(1) + " " + position.ToString()); ;
 				} else if (name[name.Length - 1] == '=') {
 					if (children.Count != 1) throw new FunctionNotFoundException("Variable assignment must have one value " + position.ToString());
-					variable = enviroment.GetVariable(name.Substring(0, name.Length - 1), position) ?? throw new FunctionNotFoundException("Failed to get variable " + name.Substring(0, name.Length - 1) + " " + position.ToString()); ;
+					variable = enviroment.GetVariable(name.Substring(0, name.Length - 1)) ?? throw new FunctionNotFoundException("Failed to get variable " + name.Substring(0, name.Length - 1) + " " + position.ToString()); ;
 					if (variable.Type != children[0].GetReturnType()) throw new FunctionNotFoundException("Cannot assign type " + enviroment.provider.GetTypeName(children[0].GetReturnType()) + " to variable of type " + enviroment.provider.GetTypeName(variable.Type) + " " + position.ToString());
 				} else if (name.Length > 7 && name.Substring(0, 7) == "DEFINE:") {
 					if (children.Count != 0) throw new FunctionNotFoundException("Variable definition cannot have arguments " + position.ToString());
@@ -786,31 +791,78 @@ namespace WordScript {
 
 	}
 
+	public class StatementBlock {
+		protected List<SyntaxNode> nodes = new List<SyntaxNode>();
+		protected Scope scope;
+		public readonly CodePosition position;
+		public Scope Scope => scope;
+
+		public void AppendSyntaxNode(SyntaxNode node) => nodes.Add(node);
+
+		public StatementBlock(Scope scope, CodePosition position) {
+			this.scope = new Scope(scope, position);
+			this.position = position;
+		}
+
+		public List<SyntaxNode> GetSyntaxNodes() => nodes;
+	}
+
 	public class Enviroment {
 		readonly public TypeInfoProvider provider;
-		protected Scope scope;
-		protected List<SyntaxNode> nodes = new List<SyntaxNode>();
+		protected Scope scope = new Scope(null, new CodePosition("-root-"));
+		protected Stack<StatementBlock> blocks = new Stack<StatementBlock>();
 
 		public Enviroment(TypeInfoProvider provider) {
 			this.provider = provider;
 		}
 
-		protected Scope GetScope(CodePosition position) {
-			return scope ?? (scope = new Scope(null, position));
+		protected Scope GetScope() {
+			return GetBlock().Scope;
 		}
-		public Scope.Variable GetVariable(string name, CodePosition position) {
-			return GetScope(position).GetVariable(name);
+
+		public StatementBlock GetBlock() {
+			return blocks.FirstOrDefault() ?? throw new BlockException("No blocks have been stated yet");
+		}
+
+		public Scope.Variable GetVariable(string name) {
+			return GetScope().GetVariable(name);
 		}
 
 		public Scope.Variable DefineVariable(string name, Type type, CodePosition position) {
-			return GetScope(position).DefineVariable(name, type, position);
+			return GetScope().DefineVariable(name, type, position);
 		}
 		public void SetVariableValue(string name, object value, CodePosition position) {
-			GetScope(position).GetVariable(name).SetValue(value, position, provider);
+			GetScope().GetVariable(name).SetValue(value, position, provider);
 		}
 
-		public void AppendSyntaxNode(SyntaxNode node) => nodes.Add(node);
+		public void StartBlock(CodePosition position) {
+			blocks.Push(new StatementBlock(blocks.FirstOrDefault()?.Scope ?? scope, position));
+		}
 
-		public List<SyntaxNode> _DebugDumpNodes() => nodes;
+		public StatementBlock EndBlock() {
+			try {
+				return blocks.Pop();
+			} catch (InvalidOperationException) {
+				throw new BlockException("No blocks have been started yet");
+			}
+		}
+
+		public void AppendSyntaxNode(SyntaxNode node) => GetBlock().AppendSyntaxNode(node);
+
+	}
+
+	[Serializable]
+	public class BlockException : WordScriptException {
+		public BlockException() {
+		}
+
+		public BlockException(string message) : base(message) {
+		}
+
+		public BlockException(string message, Exception innerException) : base(message, innerException) {
+		}
+
+		protected BlockException(SerializationInfo info, StreamingContext context) : base(info, context) {
+		}
 	}
 }

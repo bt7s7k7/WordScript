@@ -25,11 +25,10 @@ namespace WordScriptREPL {
 		static Enviroment enviroment = new Enviroment(TypeInfoProvider.GetGlobal());
 		static void Run(string code) {
 			List<CodeTokenizer.Token> tokens = null;
-			List<SyntaxNode> nodes = null;
+			StatementBlock block = null;
 			try {
 				tokens = CodeTokenizer.Tokenize(code,file);
-				TokenParser.Parse(tokens, enviroment);
-				nodes = enviroment._DebugDumpNodes();
+				block = TokenParser.Parse(tokens, enviroment, CodePosition.GetExternal());
 			} catch (WordScriptException ex) {
 				Console.WriteLine(ex.Message);
 			}
@@ -39,8 +38,8 @@ namespace WordScriptREPL {
 				}
 			}
 			Console.WriteLine("");
-			if (nodes != null) {
-				foreach (var node in nodes) {
+			if (block != null) {
+				foreach (var node in block.GetSyntaxNodes()) {
 					Console.WriteLine(node.Debug());
 				}
 			}

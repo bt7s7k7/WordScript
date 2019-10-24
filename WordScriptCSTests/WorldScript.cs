@@ -104,43 +104,70 @@ namespace WordScript.Tests {
 		[TestMethod]
 		public void Parsing() {
 			Enviroment enviroment = new Enviroment(TypeInfoProvider.GetGlobal());
-			TokenParser.Parse("\"Comment\" .\nprint IN string 25 . .\nprint IN add \"Hello\" \"world\" . .\n  mul 5 10 , string , add \" = 25\" , print .", enviroment);
-			var statements = enviroment._DebugDumpNodes();
+			var block = TokenParser.Parse("\"Comment\" .\nprint IN string 25 . .\nprint IN add \"Hello\" \"world\" . .\n  mul 5 10 , string , add \" = 25\" , print .", enviroment, CodePosition.GetExternal());
+			var statements = block.GetSyntaxNodes();
 			Assert.AreEqual(statements.Count, 4);
 		}
 
 		[TestMethod]
 		public void VariableDefinition() {
 			Enviroment enviroment = new Enviroment(TypeInfoProvider.GetGlobal());
-			Assert.IsNull(enviroment.GetVariable("y", CodePosition.GetExternal()));
+			enviroment.StartBlock(CodePosition.GetExternal());
+			Assert.IsNull(enviroment.GetVariable("y"));
 			enviroment.DefineVariable("x", typeof(int), CodePosition.GetExternal());
-			Assert.IsNotNull(enviroment.GetVariable("x", CodePosition.GetExternal()));
+			Assert.IsNotNull(enviroment.GetVariable("x"));
+			enviroment.EndBlock();
 		}
 
 		[TestMethod]
 		[ExpectedException(typeof(VariableException))]
 		public void VariableRedefinitionFail() {
 			Enviroment enviroment = new Enviroment(TypeInfoProvider.GetGlobal());
+			enviroment.StartBlock(CodePosition.GetExternal());
 			enviroment.DefineVariable("x", typeof(int), CodePosition.GetExternal());
 			enviroment.DefineVariable("x", typeof(int), CodePosition.GetExternal());
+			enviroment.EndBlock();
 		}
 
 		[TestMethod]
 		public void VariablesInCode() {
 			Enviroment enviroment = new Enviroment(TypeInfoProvider.GetGlobal());
+			enviroment.StartBlock(CodePosition.GetExternal());
 			enviroment.DefineVariable("x", typeof(int), CodePosition.GetExternal());
-			TokenParser.Parse("DEFINE:y:int . &y . y= 0 . &x . x= &y .", enviroment);
+			TokenParser.Parse("DEFINE:y:int . &y . y= 0 . &x . x= &y .", enviroment, CodePosition.GetExternal(), true);
 
-			Assert.IsNotNull(enviroment.GetVariable("y", CodePosition.GetExternal()));
-			Assert.AreEqual(enviroment.GetVariable("y", CodePosition.GetExternal()).Type, typeof(int));
+			Assert.IsNotNull(enviroment.GetVariable("y"));
+			Assert.AreEqual(enviroment.GetVariable("y").Type, typeof(int));
+			enviroment.EndBlock();
 		}
 
 		[TestMethod]
 		[ExpectedException(typeof(FunctionNotFoundException))]
 		public void VariableTypeSafetyInCode() {
 			Enviroment enviroment = new Enviroment(TypeInfoProvider.GetGlobal());
+			enviroment.StartBlock(CodePosition.GetExternal());
 			enviroment.DefineVariable("x", typeof(string), CodePosition.GetExternal());
-			TokenParser.Parse("x= 0 .", enviroment);
+			TokenParser.Parse("x= 0 .", enviroment, CodePosition.GetExternal());
+			enviroment.EndBlock();
+		}
+
+		[TestMethod]
+		public void VariableInheritance() {
+			Enviroment enviroment = new Enviroment(TypeInfoProvider.GetGlobal());
+			enviroment.StartBlock(CodePosition.GetExternal());
+			var xOut = enviroment.DefineVariable("x", typeof(string), CodePosition.GetExternal());
+			var yOut = enviroment.DefineVariable("y", typeof(int), CodePosition.GetExternal());
+			enviroment.StartBlock(CodePosition.GetExternal());
+			Assert.AreEqual(yOut, enviroment.GetVariable("y"));
+			Assert.AreEqual(xOut, enviroment.GetVariable("x"));
+			var yInner = enviroment.DefineVariable("y", typeof(string), CodePosition.GetExternal());
+			var zInner = enviroment.DefineVariable("z", typeof(string), CodePosition.GetExternal());
+			Assert.AreNotEqual(yOut, enviroment.GetVariable("y"));
+			enviroment.EndBlock();
+			Assert.AreEqual(yOut, enviroment.GetVariable("y"));
+			Assert.IsNull(enviroment.GetVariable("z"));
+
+			enviroment.EndBlock();
 		}
 
 		[TestMethod]
@@ -172,6 +199,13 @@ namespace WordScript.Tests {
 			Assert.AreEqual(provider.GetFunctionSignature("test", new Type[] { }), "test");
 			Assert.AreEqual(provider.GetFunctionSignature("testa", new Type[] { }), "testa");
 			Assert.AreEqual(provider.GetFunctionSignature("testb", new Type[] { typeof(int) }), "testb int");
+		}
+
+		[TestMethod()]
+		public void StatementBlockPosition() {
+			Enviroment enviroment = new Enviroment(provider);
+			var block = TokenParser.Parse("int 0f .", enviroment, CodePosition.GetExternal());
+			Assert.AreEqual(block.position, CodePosition.GetExternal());
 		}
 	}
 }
