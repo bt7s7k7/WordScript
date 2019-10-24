@@ -174,7 +174,7 @@ namespace WordScript {
 		}
 
 		public string GetFunctionSignature(string name, IEnumerable<Type> arguments) {
-			return name + " " + string.Join(" ", arguments.Select(v => GetTypeName(v)));
+			return name + (arguments.Count() > 0 ? " " + string.Join(" ", arguments.Select(v => GetTypeName(v))) : "");
 		}
 
 		public string GetTypeName(Type type) {

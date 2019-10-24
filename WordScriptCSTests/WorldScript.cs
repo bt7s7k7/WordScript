@@ -158,5 +158,20 @@ namespace WordScript.Tests {
 			Assert.IsNotNull(provider.GetFunction("TestMethod int"));
 		}
 
+		[TestMethod()]
+		public void AddFunctionTest() {
+			TypeInfoProvider provider = new TypeInfoProvider();
+
+			provider.AddFunction("test", (v) => v, typeof(void), new Type[] { });
+
+			Assert.IsNotNull(provider.GetFunction("test"));
+		}
+
+		[TestMethod()]
+		public void GetFunctionSignatureTest() {
+			Assert.AreEqual(provider.GetFunctionSignature("test", new Type[] { }), "test");
+			Assert.AreEqual(provider.GetFunctionSignature("testa", new Type[] { }), "testa");
+			Assert.AreEqual(provider.GetFunctionSignature("testb", new Type[] { typeof(int) }), "testb int");
+		}
 	}
 }
