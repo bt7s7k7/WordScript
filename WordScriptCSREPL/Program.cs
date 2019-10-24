@@ -22,7 +22,7 @@ namespace WordScriptREPL {
 				Run(File.ReadAllText(args[0]));
 			}
 		}
-		static Enviroment enviroment = new Enviroment();
+		static Enviroment enviroment = new Enviroment(TypeInfoProvider.GetGlobal());
 		static void Run(string code) {
 			List<CodeTokenizer.Token> tokens = null;
 			List<SyntaxNode> nodes = null;

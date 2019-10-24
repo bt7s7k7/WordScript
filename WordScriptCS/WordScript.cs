@@ -17,11 +17,14 @@ namespace WordScript {
 	}
 
 	[AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
-	public sealed class TypeConversionAttribute : Attribute { }
+	public sealed class TypeConversionAttribute : Attribute {
+		public bool isStandard = false;
+	}
 
 	[AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = false)]
 	public sealed class FunctionDefinitionAttribute : Attribute {
 		public string name;
+		public bool isStandard = false;
 
 		public FunctionDefinitionAttribute(string name) {
 			this.name = name;
@@ -132,9 +135,18 @@ namespace WordScript {
 
 
 	public class TypeInfoProvider {
-		private static Dictionary<Type, string> names;
-		private static Dictionary<string, Function> functions;
-		private static Dictionary<string, List<string>> overloads;
+		private Dictionary<Type, string> names = new Dictionary<Type, string>();
+		private Dictionary<string, Function> functions = new Dictionary<string, Function>();
+		private Dictionary<string, List<string>> overloads = new Dictionary<string, List<string>>();
+		private static TypeInfoProvider singleton = null;
+
+		public static TypeInfoProvider GetGlobal() {
+			if (singleton == null) {
+				singleton = new TypeInfoProvider();
+				singleton.LoadGlobals(false);
+			}
+			return singleton;
+		}
 
 		protected void AddOverload(string name, string signature) {
 			if (overloads.TryGetValue(name, out List<string> signatures)) {
@@ -150,6 +162,17 @@ namespace WordScript {
 			AddOverload(func.name, signature);
 		}
 
+		public TypeInfoProvider AddFunction(string name, Func<object[], object> func, Type returnType = null, IEnumerable<Type> arguments = null) {
+			AddFunction(new Function {
+				name = name,
+				function = func,
+				arguments = arguments ?? (new Type[] { }),
+				returnType = returnType ?? typeof(void)
+			});
+
+			return this;
+		}
+
 		public string GetFunctionSignature(string name, IEnumerable<Type> arguments) {
 			return name + " " + string.Join(" ", arguments.Select(v => GetTypeName(v)));
 		}
@@ -161,7 +184,10 @@ namespace WordScript {
 				throw new TypeNotRegisteredException("Type " + type.FullName + " is not registered");
 			}
 		}
-
+			
+		/// <summary>
+		/// Finds a function with the signature. If no found throw <see cref="FunctionNotFoundException"></see>
+		/// </summary>
 		public Function GetFunction(string name) {
 			if (functions.TryGetValue(name, out Function function)) {
 				return function;
@@ -176,67 +202,87 @@ namespace WordScript {
 			}
 		}
 
-		public TypeInfoProvider() {
-			if (names == null) {
-				names = new Dictionary<Type, string>();
-				functions = new Dictionary<string, Function>();
-				overloads = new Dictionary<string, List<string>>();
-				var methods = AppDomain.CurrentDomain.GetAssemblies().AsParallel()
-					.SelectMany((v) => v.GetTypes())
-					.SelectMany(v => v.GetMethods())
-					.Where(v => v.IsStatic && !v.IsGenericMethodDefinition && !v.IsGenericMethod);
+		/// <summary>
+		/// Loads types and functions specified by attributes, if you want all functions use: <see cref="TypeInfoProvider.GetGlobal"/>. Only use to include standard functions such as "add" or "string"
+		/// </summary>
+		public TypeInfoProvider LoadGlobals(bool standardOnly = true) {
+			names = new Dictionary<Type, string>();
+			functions = new Dictionary<string, Function>();
+			overloads = new Dictionary<string, List<string>>();
+			var methods = AppDomain.CurrentDomain.GetAssemblies().AsParallel()
+				.SelectMany((v) => v.GetTypes())
+				.SelectMany(v => v.GetMethods())
+				.Where(v => v.IsStatic && !v.IsGenericMethodDefinition && !v.IsGenericMethod);
 
-				foreach (var method in methods) {
-					var nameAttr = method.GetCustomAttribute<TypeNameAttribute>(false);
-					if (nameAttr != null) {
-						var name = (string)method.Invoke(null, new object[] { });
+			foreach (var method in methods) {
+				var nameAttr = method.GetCustomAttribute<TypeNameAttribute>(false);
+				if (nameAttr != null) {
+					var name = (string)method.Invoke(null, new object[] { });
 
-						names.Add(nameAttr.targetType, name);
-					}
+					names.Add(nameAttr.targetType, name);
 				}
-
-				foreach (var method in methods) {
-					var convAttr = method.GetCustomAttribute<TypeConversionAttribute>(false);
-					if (convAttr != null) {
-						var source = method.GetParameters()[0]?.ParameterType;
-						if (source == null) throw new Exception("Conversion method does not accept a parameter");
-						var target = method.ReturnType;
-
-						AddFunction(new Function {
-							name = GetTypeName(target),
-							arguments = new Type[] { source },
-							returnType = target,
-							function = (args) => method.Invoke(null, args)
-						});
-					}
-				}
-
-				foreach (var method in methods) {
-					var funcDefAttrs = method.GetCustomAttributes<FunctionDefinitionAttribute>(false);
-					foreach (var funcDefAttr in funcDefAttrs) {
-						var returnType = method.ReturnType;
-						var arguments = method.GetParameters().Select(v => v.ParameterType);
-
-						var function = new Function {
-							arguments = arguments,
-							name = funcDefAttr.name,
-							function = (args) => method.Invoke(null, args),
-							returnType = returnType
-						};
-
-						AddFunction(function);
-					}
-				}
-
 			}
 
+			foreach (var method in methods) {
+				var convAttr = method.GetCustomAttribute<TypeConversionAttribute>(false);
+				if (convAttr != null) {
+					if (standardOnly && !convAttr.isStandard) continue;
+					var source = method.GetParameters()[0]?.ParameterType;
+					if (source == null) throw new Exception("Conversion method does not accept a parameter");
+					var target = method.ReturnType;
 
+					AddFunction(new Function {
+						name = GetTypeName(target),
+						arguments = new Type[] { source },
+						returnType = target,
+						function = (args) => method.Invoke(null, args)
+					});
+				}
+			}
+
+			foreach (var method in methods) {
+				var funcDefAttrs = method.GetCustomAttributes<FunctionDefinitionAttribute>(false);
+				foreach (var funcDefAttr in funcDefAttrs) {
+					if (standardOnly && !funcDefAttr.isStandard) continue;
+					var returnType = method.ReturnType;
+					var arguments = method.GetParameters().Select(v => v.ParameterType);
+
+					var function = new Function {
+						arguments = arguments,
+						name = funcDefAttr.name,
+						function = (args) => method.Invoke(null, args),
+						returnType = returnType
+					};
+
+					AddFunction(function);
+				}
+			}
+
+			return this;
 		}
 
 		public Type GetTypeByName(string name) {
 			var retCan = names.Where(v => v.Value == name).Select(v => v.Key);
 			if (retCan.Count() < 1) throw new TypeNotRegisteredException("There is no type registered for name " + name);
 			else return retCan.First();
+		}
+
+		/// <summary>
+		/// Includes the functions from a source provider, defaults to global provider. Add all function overloads, select by name
+		/// </summary>
+		public TypeInfoProvider Include(IEnumerable<string> functionNames, TypeInfoProvider source = null) {
+			source = source ?? TypeInfoProvider.GetGlobal();
+
+			names = new Dictionary<Type, string>(source.names);
+
+			foreach (var name in functionNames) {
+				foreach (var signature in source.GetOverloads(name)) {
+					AddFunction(source.GetFunction(signature));
+				}
+			}
+
+			return this;
+
 		}
 	}
 
@@ -250,52 +296,49 @@ namespace WordScript {
 		[TypeName(typeof(float))]
 		public static string GetFloatName() => "float";
 
-		[TypeConversion]
+		[TypeConversion(isStandard = true)]
 		public static string IntToString(int v) => v.ToString();
 
-		[TypeConversion]
+		[TypeConversion(isStandard = true)]
 		public static string FloatToString(float v) => v.ToString();
 
-		[TypeConversion]
+		[TypeConversion(isStandard = true)]
 		public static int FloatToInt(float v) => (int)Math.Floor(v);
 
-		[TypeConversion]
+		[TypeConversion(isStandard = true)]
 		public static float IntToFloat(int v) => v;
 
-		[TypeConversion]
+		[TypeConversion(isStandard = true)]
 		public static int StringToInt(string v) => int.Parse(v);
 
-		[TypeConversion]
+		[TypeConversion(isStandard = true)]
 		public static float StringToFloat(string v) => float.Parse(v, CultureInfo.InvariantCulture);
 
-		[FunctionDefinition("print")]
-		public static void Print(string v) => Enviroment.printFunction(v);
-
-		[FunctionDefinition("add")]
+		[FunctionDefinition("add", isStandard = true)]
 		public static string AddString(string a, string b) => a + b;
 
-		[FunctionDefinition("add")]
+		[FunctionDefinition("add", isStandard = true)]
 		public static int AddInt(int a, int b) => a + b;
-		
-		[FunctionDefinition("add")]
+
+		[FunctionDefinition("add", isStandard = true)]
 		public static float AddFloat(float a, float b) => a + b;
-		
-		[FunctionDefinition("sub")]
+
+		[FunctionDefinition("sub", isStandard = true)]
 		public static int SubInt(int a, int b) => a - b;
-		
-		[FunctionDefinition("sub")]
+
+		[FunctionDefinition("sub", isStandard = true)]
 		public static float SubFloat(float a, float b) => a - b;
-		
-		[FunctionDefinition("mul")]
+
+		[FunctionDefinition("mul", isStandard = true)]
 		public static int MulInt(int a, int b) => a * b;
-		
-		[FunctionDefinition("mul")]
+
+		[FunctionDefinition("mul", isStandard = true)]
 		public static float MulFloat(float a, float b) => a * b;
-		
-		[FunctionDefinition("div")]
+
+		[FunctionDefinition("div", isStandard = true)]
 		public static int DivInt(int a, int b) => a / b;
-		
-		[FunctionDefinition("div")]
+
+		[FunctionDefinition("div", isStandard = true)]
 		public static float DivFloat(float a, float b) => a / b;
 
 	}
@@ -744,11 +787,13 @@ namespace WordScript {
 	}
 
 	public class Enviroment {
-		readonly public TypeInfoProvider provider = new TypeInfoProvider();
+		readonly public TypeInfoProvider provider;
 		protected Scope scope;
 		protected List<SyntaxNode> nodes = new List<SyntaxNode>();
 
-		public static Action<string> printFunction = (v) => { };
+		public Enviroment(TypeInfoProvider provider) {
+			this.provider = provider;
+		}
 
 		protected Scope GetScope(CodePosition position) {
 			return scope ?? (scope = new Scope(null, position));

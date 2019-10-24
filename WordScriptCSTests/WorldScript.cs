@@ -4,16 +4,26 @@ using System.Collections.Generic;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using WordScript;
 
-namespace WordScriptTests {
+namespace WordScript.Tests {
+
 	/// <summary>
 	/// Summary description for WorldScript
 	/// </summary>
 	[TestClass]
 	public class WorldScript {
+
 		public WorldScript() {
 			//
 			// TODO: Add constructor logic here
 			//
+		}
+
+		[AssemblyInitialize]
+		public static void Setup(TestContext context) {
+			TypeInfoProvider.GetGlobal().AddFunction("print", (a) => {
+				context.WriteLine((string)a[0]);
+				return null;
+			}, null, new Type[] { typeof(string) });
 		}
 
 		private TestContext testContextInstance;
@@ -52,7 +62,7 @@ namespace WordScriptTests {
 		// public void MyTestCleanup() { }
 		//
 		#endregion
-		TypeInfoProvider provider = new TypeInfoProvider();
+		TypeInfoProvider provider = TypeInfoProvider.GetGlobal();
 
 		[TestMethod]
 		public void GettingDefaultTypeName() {
@@ -93,7 +103,7 @@ namespace WordScriptTests {
 
 		[TestMethod]
 		public void Parsing() {
-			Enviroment enviroment = new Enviroment();
+			Enviroment enviroment = new Enviroment(TypeInfoProvider.GetGlobal());
 			TokenParser.Parse("\"Comment\" .\nprint IN string 25 . .\nprint IN add \"Hello\" \"world\" . .\n  mul 5 10 , string , add \" = 25\" , print .", enviroment);
 			var statements = enviroment._DebugDumpNodes();
 			Assert.AreEqual(statements.Count, 4);
@@ -101,7 +111,7 @@ namespace WordScriptTests {
 
 		[TestMethod]
 		public void VariableDefinition() {
-			Enviroment enviroment = new Enviroment();
+			Enviroment enviroment = new Enviroment(TypeInfoProvider.GetGlobal());
 			Assert.IsNull(enviroment.GetVariable("y", CodePosition.GetExternal()));
 			enviroment.DefineVariable("x", typeof(int), CodePosition.GetExternal());
 			Assert.IsNotNull(enviroment.GetVariable("x", CodePosition.GetExternal()));
@@ -110,14 +120,14 @@ namespace WordScriptTests {
 		[TestMethod]
 		[ExpectedException(typeof(VariableException))]
 		public void VariableRedefinitionFail() {
-			Enviroment enviroment = new Enviroment();
+			Enviroment enviroment = new Enviroment(TypeInfoProvider.GetGlobal());
 			enviroment.DefineVariable("x", typeof(int), CodePosition.GetExternal());
 			enviroment.DefineVariable("x", typeof(int), CodePosition.GetExternal());
 		}
 
 		[TestMethod]
 		public void VariablesInCode() {
-			Enviroment enviroment = new Enviroment();
+			Enviroment enviroment = new Enviroment(TypeInfoProvider.GetGlobal());
 			enviroment.DefineVariable("x", typeof(int), CodePosition.GetExternal());
 			TokenParser.Parse("DEFINE:y:int . &y . y= 0 . &x . x= &y .", enviroment);
 
@@ -128,9 +138,25 @@ namespace WordScriptTests {
 		[TestMethod]
 		[ExpectedException(typeof(FunctionNotFoundException))]
 		public void VariableTypeSafetyInCode() {
-			Enviroment enviroment = new Enviroment();
+			Enviroment enviroment = new Enviroment(TypeInfoProvider.GetGlobal());
 			enviroment.DefineVariable("x", typeof(string), CodePosition.GetExternal());
 			TokenParser.Parse("x= 0 .", enviroment);
 		}
+
+		[TestMethod]
+		public void StandardInclusion() {
+			TypeInfoProvider provider = new TypeInfoProvider().LoadGlobals();
+
+			Assert.IsNotNull(provider.GetFunction("string int"));
+		}
+
+		[TestMethod]
+		[ExpectedException(typeof(FunctionNotFoundException))]
+		public void StandardInclusionFiltering() {
+			TypeInfoProvider provider = new TypeInfoProvider().LoadGlobals();
+
+			Assert.IsNotNull(provider.GetFunction("TestMethod int"));
+		}
+
 	}
 }
