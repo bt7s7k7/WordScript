@@ -93,8 +93,44 @@ namespace WordScriptTests {
 
 		[TestMethod]
 		public void Parsing() {
-			var statements = TokenParser.Parse("\"Comment\" .\nprint 25 .\nprint IN string.concat \"Hello\" \"world\" . .\n  int.mul 5 10 , int.toString , concat \" = 25\" , printn .");
+			Enviroment enviroment = new Enviroment();
+			TokenParser.Parse("\"Comment\" .\nprint 25 .\nprint IN string.concat \"Hello\" \"world\" . .\n  int.mul 5 10 , int.toString , concat \" = 25\" , printn .", enviroment);
+			var statements = enviroment._DebugDumpNodes();
 			Assert.AreEqual(statements.Count, 4);
+		}
+
+		[TestMethod]
+		public void VariableDefinition() {
+			Enviroment enviroment = new Enviroment();
+			Assert.IsNull(enviroment.GetVariable("y", CodePosition.GetExternal()));
+			enviroment.DefineVariable("x", typeof(int), CodePosition.GetExternal());
+			Assert.IsNotNull(enviroment.GetVariable("x", CodePosition.GetExternal()));
+		}
+
+		[TestMethod]
+		[ExpectedException(typeof(VariableException))]
+		public void VariableRedefinitionFail() {
+			Enviroment enviroment = new Enviroment();
+			enviroment.DefineVariable("x", typeof(int), CodePosition.GetExternal());
+			enviroment.DefineVariable("x", typeof(int), CodePosition.GetExternal());
+		}
+
+		[TestMethod]
+		public void VariablesInCode() {
+			Enviroment enviroment = new Enviroment();
+			enviroment.DefineVariable("x", typeof(int), CodePosition.GetExternal());
+			TokenParser.Parse("DEFINE:y:int . &y . y= 0 . &x . x= &y .", enviroment);
+
+			Assert.IsNotNull(enviroment.GetVariable("y", CodePosition.GetExternal()));
+			Assert.AreEqual(enviroment.GetVariable("y", CodePosition.GetExternal()).Type, typeof(int));
+		}
+
+		[TestMethod]
+		[ExpectedException(typeof(FunctionNotFoundException))]
+		public void VariableTypeSafetyInCode() {
+			Enviroment enviroment = new Enviroment();
+			enviroment.DefineVariable("x", typeof(string), CodePosition.GetExternal());
+			TokenParser.Parse("x= 0 .", enviroment);
 		}
 	}
 }

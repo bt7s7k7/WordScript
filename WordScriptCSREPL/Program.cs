@@ -10,7 +10,7 @@ namespace WordScriptREPL {
 	class Program {
 		static string file = "<anonymous>";
 		static void Main(string[] args) {
-			if (args.Length == 0) {
+			if (args.Length == 0 || args[0][0] != '#') {
 				Console.WriteLine("WordScript REPL\nCopyright (C) Branislav Trstenský 2019\n");
 				while (true) {
 					Console.Write("> ");
@@ -22,13 +22,14 @@ namespace WordScriptREPL {
 				Run(File.ReadAllText(args[0]));
 			}
 		}
-
+		static Enviroment enviroment = new Enviroment();
 		static void Run(string code) {
 			List<CodeTokenizer.Token> tokens = null;
 			List<SyntaxNode> nodes = null;
 			try {
 				tokens = CodeTokenizer.Tokenize(code,file);
-				nodes = TokenParser.Parse(tokens);
+				TokenParser.Parse(tokens, enviroment);
+				nodes = enviroment._DebugDumpNodes();
 			} catch (WordScriptException ex) {
 				Console.WriteLine(ex.Message);
 			}

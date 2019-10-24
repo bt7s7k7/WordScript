@@ -119,6 +119,17 @@ namespace WordScript {
 	}
 
 
+	[Serializable]
+	public class VariableException : WordScriptException {
+		public VariableException() { }
+		public VariableException(string message) : base(message) { }
+		public VariableException(string message, Exception inner) : base(message, inner) { }
+		protected VariableException(
+		  System.Runtime.Serialization.SerializationInfo info,
+		  System.Runtime.Serialization.StreamingContext context) : base(info, context) { }
+	}
+
+
 	public class TypeInfoProvider {
 		private static Dictionary<Type, string> names;
 		private static Dictionary<string, Function> functions;
@@ -211,6 +222,12 @@ namespace WordScript {
 
 
 		}
+
+		public Type GetTypeByName(string name) {
+			var retCan = names.Where(v => v.Value == name).Select(v => v.Key);
+			if (retCan.Count() < 1) throw new TypeNotRegisteredException("There is no type registered for name " + name);
+			else return retCan.First();
+		}
 	}
 
 	public static class DefaultTypeInfo {
@@ -239,6 +256,21 @@ namespace WordScript {
 			this.file = file;
 		}
 
+		public override bool Equals(object obj) {
+			return obj is CodePosition position &&
+				   line == position.line &&
+				   col == position.col &&
+				   file == position.file;
+		}
+
+		public override int GetHashCode() {
+			var hashCode = -2131546509;
+			hashCode = hashCode * -1521134295 + line.GetHashCode();
+			hashCode = hashCode * -1521134295 + col.GetHashCode();
+			hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(file);
+			return hashCode;
+		}
+
 		public void NextLetter() => col++;
 		public void NextLine() {
 			col = 0;
@@ -247,6 +279,16 @@ namespace WordScript {
 		public override string ToString() {
 			return "at " + line + ":" + col + ":" + file;
 		}
+
+		public static bool operator ==(CodePosition a, CodePosition b) {
+			return a.line == b.line && a.col == b.col && a.file == b.file;
+		}
+
+		public static bool operator !=(CodePosition a, CodePosition b) {
+			return !(a == b);
+		}
+
+		public static CodePosition GetExternal() => new CodePosition("<external>");
 	}
 
 	public static class CodeTokenizer {
@@ -377,7 +419,7 @@ namespace WordScript {
 
 	public class TokenParser {
 
-		public static SyntaxNode ParseStatement(ref IEnumerator<CodeTokenizer.Token> enumerator, bool isArgument, SyntaxNode piped = null) {
+		public static SyntaxNode ParseStatement(ref IEnumerator<CodeTokenizer.Token> enumerator, Enviroment enviroment, bool isArgument, SyntaxNode piped = null) {
 			SyntaxNode ret = null;
 			SyntaxNodeTypes.Statement statement = null;
 			CodeTokenizer.Token currentToken = enumerator.Current;
@@ -392,7 +434,7 @@ namespace WordScript {
 					if (!isArgument) throw new UnexpectedTokenException("Expected statement start, unexpected " + currentToken.position.ToString());
 					// Move next to the start of the inline statement
 					if (!enumerator.MoveNext()) throw new EndOfFileException("Unexpected end of file, expected statement " + currentToken.position.ToString());
-					return ParseStatement(ref enumerator, false);
+					return ParseStatement(ref enumerator, enviroment, false);
 				} else {
 					throw new FunctionNotFoundException("Keyword unknown " + currentToken.ToString());
 				}
@@ -423,7 +465,7 @@ namespace WordScript {
 			}
 
 			if (isArgument) {
-				if (statement != null) statement.Validate(currentToken.text);
+				if (statement != null) statement.Validate(currentToken.text, enviroment);
 				return ret;
 			}
 
@@ -445,18 +487,18 @@ namespace WordScript {
 
 				var current = enumerator.Current;
 				if (current.type == CodeTokenizer.Token.Type.Terminator) {
-					if (statement != null) statement.Validate(currentToken.text);
+					if (statement != null) statement.Validate(currentToken.text, enviroment);
 					return ret;
 				} else if (current.type == CodeTokenizer.Token.Type.Pipe) {
-					if (statement != null) statement.Validate(currentToken.text);
+					if (statement != null) statement.Validate(currentToken.text, enviroment);
 					var lastPos = enumerator.Current.position;
 					if (!enumerator.MoveNext()) {
 						throw new EndOfFileException("Unexpected end of file, expected a statement to pipe into " + lastPos);
 					}
-					return ParseStatement(ref enumerator, false, ret);
+					return ParseStatement(ref enumerator, enviroment, false, ret);
 				} else {
 					if (statement != null) {
-						statement.children.Add(ParseStatement(ref enumerator, true));
+						statement.children.Add(ParseStatement(ref enumerator, enviroment, true));
 					} else {
 						throw new UnexpectedTokenException("Unexpected argument, expected a terminator " + current.position);
 					}
@@ -464,20 +506,15 @@ namespace WordScript {
 			}
 		}
 
-		public static List<SyntaxNode> Parse(List<CodeTokenizer.Token> tokens) {
-			var ret = new List<SyntaxNode>();
+		public static void Parse(List<CodeTokenizer.Token> tokens, Enviroment enviroment) {
 			IEnumerator<CodeTokenizer.Token> enumerator = tokens.GetEnumerator();
 
 			while (enumerator.MoveNext()) {
-				ret.Add(ParseStatement(ref enumerator, false));
+				enviroment.AppendSyntaxNode(ParseStatement(ref enumerator, enviroment, false));
 			}
-
-			return ret;
 		}
 
-		public static List<SyntaxNode> Parse(string text) {
-			return Parse(CodeTokenizer.Tokenize(text));
-		}
+		public static void Parse(string text, Enviroment enviroment) => Parse(CodeTokenizer.Tokenize(text), enviroment);
 	}
 
 	public abstract class SyntaxNode {
@@ -505,6 +542,7 @@ namespace WordScript {
 		public class Statement : SyntaxNode {
 			public List<SyntaxNode> children = new List<SyntaxNode>();
 			public Function function = null;
+			public Scope.Variable variable = null;
 
 			public Statement(CodePosition position) {
 				this.position = position;
@@ -512,26 +550,43 @@ namespace WordScript {
 
 			public override object Evaluate() {
 				if (function == null) {
-					throw new Exception("Statement not validated yet");
+					if (variable == null) throw new Exception("Statement not validated yet");
+					else {
+						throw new NotImplementedException("Evaluation not yet implemented");
+					}
 				} else {
 					throw new NotImplementedException("Evaluation not yet implemented");
 				}
 			}
 
 			public override Type GetReturnType() {
-				return function?.returnType ?? throw new Exception("Statement not validated yet");
+				return function?.returnType ?? variable?.Type ?? throw new Exception("Statement not validated yet");
 			}
 
-			public void Validate(string name) {
-				if (function != null) throw new Exception("Tryied to validate a validated statement");
-				var provider = new TypeInfoProvider();
-				var overloads = provider.GetOverloads(name);
-				var signature = provider.GetFunctionSignature(name, children.Select(v => v.GetReturnType()));
-				var signIndex = overloads.IndexOf(signature);
-				if (signIndex == -1) {
-					throw new FunctionNotFoundException("Function not found \"" + signature + "\"" + position.ToString() + ", posible overloads: {\n  " + string.Join(", \n  ", overloads) + "\n}");
+			public void Validate(string name, Enviroment enviroment) {
+				if (name[0] == '&') {
+					if (children.Count != 0) throw new FunctionNotFoundException("You cannot call variable query with any arguments " + position.ToString());
+					variable = enviroment.GetVariable(name.Substring(1), position) ?? throw new FunctionNotFoundException("Failed to get variable " + name.Substring(1) + " " + position.ToString()); ;
+				} else if (name[name.Length - 1] == '=') {
+					if (children.Count != 1) throw new FunctionNotFoundException("Variable assignment must have one value " + position.ToString());
+					variable = enviroment.GetVariable(name.Substring(0, name.Length - 1), position) ?? throw new FunctionNotFoundException("Failed to get variable " + name.Substring(0, name.Length - 1) + " " + position.ToString()); ;
+					if (variable.Type != children[0].GetReturnType()) throw new FunctionNotFoundException("Cannot assign type " + enviroment.provider.GetTypeName(children[0].GetReturnType()) + " to variable of type " + enviroment.provider.GetTypeName(variable.Type) + " " + position.ToString());
+				} else if (name.Length > 7 && name.Substring(0, 7) == "DEFINE:") {
+					if (children.Count != 0) throw new FunctionNotFoundException("Variable definition cannot have arguments " + position.ToString());
+					var segments = name.Split(':');
+					if (segments.Length != 3) throw new FunctionNotFoundException("Variable definition in not in corret format, expected DEFINE:<name>:<type> " + position.ToString());
+					var type = enviroment.provider.GetTypeByName(segments[2]);
+					variable = enviroment.DefineVariable(segments[1], type, position);
 				} else {
-					function = provider.GetFunction(signature);
+					if (function != null) throw new Exception("Tryied to validate a validated statement");
+					var overloads = enviroment.provider.GetOverloads(name);
+					var signature = enviroment.provider.GetFunctionSignature(name, children.Select(v => v.GetReturnType()));
+					var signIndex = overloads.IndexOf(signature);
+					if (signIndex == -1) {
+						throw new FunctionNotFoundException("Function not found \"" + signature + "\"" + position.ToString() + ", posible overloads: {\n  " + string.Join(", \n  ", overloads) + "\n}");
+					} else {
+						function = enviroment.provider.GetFunction(signature);
+					}
 				}
 			}
 
@@ -540,13 +595,19 @@ namespace WordScript {
 			}
 
 			public override void GetDebug(Action<string> write, ref int indent) {
-				write("Statment[" + children.Count + "] = {");
-				indent++;
-				foreach (var child in children) {
-					child.GetDebug(write, ref indent);
+				if (function != null) {
+					write("Statment[" + children.Count + "] = {");
+					indent++;
+					foreach (var child in children) {
+						child.GetDebug(write, ref indent);
+					}
+					indent--;
+					write("}");
+				} else if (variable != null) {
+					write("Variable " + (children.Count == 1 ? "assignment" : (variable.Position == position ? "definition" : "query")) + ": " + variable.GetType().FullName + " " + variable.Position);
+				} else {
+					throw new Exception("Statement not validated yet");
 				}
-				indent--;
-				write("}");
 			}
 		}
 
@@ -572,5 +633,84 @@ namespace WordScript {
 		}
 	}
 
+	public class Scope {
+		public class Variable {
+			protected object value;
+			protected Type type;
+			protected CodePosition position;
 
+			public object Value { get => value; }
+			public CodePosition Position { get => position; }
+			public Type Type { get => type; }
+
+			public Variable(Type type, CodePosition position) {
+				if (type.IsValueType) {
+					value = Activator.CreateInstance(type);
+				} else {
+					value = null;
+				}
+				this.type = type;
+				this.position = position;
+			}
+
+			public void SetValue(object newValue, CodePosition position, TypeInfoProvider provider) {
+				if (newValue.GetType() == type) value = newValue;
+				else throw new VariableException("Variable tryied to set a variable of type " + provider.GetTypeName(type) + " to type " + provider.GetTypeName(newValue.GetType()));
+			}
+		}
+
+		public Dictionary<string, Variable> variables = new Dictionary<string, Variable>();
+		public CodePosition start;
+		public int depth;
+		public Scope parent;
+
+		public Scope(Scope parent, CodePosition position) {
+			start = position;
+			this.parent = parent;
+			depth = parent?.depth + 1 ?? 0;
+		}
+
+		public Variable GetVariable(string name) {
+			if (variables.TryGetValue(name, out Variable ret)) {
+				return ret;
+			} else {
+				return parent?.GetVariable(name);
+			}
+		}
+
+		public Variable DefineVariable(string name, Type type, CodePosition position) {
+			try {
+				Variable ret = new Variable(type, position);
+				variables.Add(name, ret);
+				return ret;
+			} catch (ArgumentException) {
+				throw new VariableException("Variable named \"" + name + "\" is already defined " + position.ToString());
+			}
+		}
+
+	}
+
+	public class Enviroment {
+		readonly public TypeInfoProvider provider = new TypeInfoProvider();
+		protected Scope scope;
+		protected List<SyntaxNode> nodes = new List<SyntaxNode>();
+
+		protected Scope GetScope(CodePosition position) {
+			return scope ?? (scope = new Scope(null, position));
+		}
+		public Scope.Variable GetVariable(string name, CodePosition position) {
+			return GetScope(position).GetVariable(name);
+		}
+
+		public Scope.Variable DefineVariable(string name, Type type, CodePosition position) {
+			return GetScope(position).DefineVariable(name, type, position);
+		}
+		public void SetVariableValue(string name, object value, CodePosition position) {
+			GetScope(position).GetVariable(name).SetValue(value, position, provider);
+		}
+
+		public void AppendSyntaxNode(SyntaxNode node) => nodes.Add(node);
+
+		public List<SyntaxNode> _DebugDumpNodes() => nodes;
+	}
 }
