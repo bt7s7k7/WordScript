@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Linq;
 using System.Collections;
 using System.Text;
+using System.Globalization;
 
 namespace WordScript {
 	[AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
@@ -20,7 +21,7 @@ namespace WordScript {
 
 	[AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = false)]
 	public sealed class FunctionDefinitionAttribute : Attribute {
-		string name;
+		public string name;
 
 		public FunctionDefinitionAttribute(string name) {
 			this.name = name;
@@ -30,7 +31,7 @@ namespace WordScript {
 	public class Function {
 		public Func<object[], object> function;
 		public Type returnType;
-		public Type[] arguments;
+		public IEnumerable<Type> arguments;
 		public string name;
 	}
 
@@ -202,7 +203,7 @@ namespace WordScript {
 						var target = method.ReturnType;
 
 						AddFunction(new Function {
-							name = GetTypeName(target) + ".from",
+							name = GetTypeName(target),
 							arguments = new Type[] { source },
 							returnType = target,
 							function = (args) => method.Invoke(null, args)
@@ -215,6 +216,15 @@ namespace WordScript {
 					foreach (var funcDefAttr in funcDefAttrs) {
 						var returnType = method.ReturnType;
 						var arguments = method.GetParameters().Select(v => v.ParameterType);
+
+						var function = new Function {
+							arguments = arguments,
+							name = funcDefAttr.name,
+							function = (args) => method.Invoke(null, args),
+							returnType = returnType
+						};
+
+						AddFunction(function);
 					}
 				}
 
@@ -245,6 +255,49 @@ namespace WordScript {
 
 		[TypeConversion]
 		public static string FloatToString(float v) => v.ToString();
+
+		[TypeConversion]
+		public static int FloatToInt(float v) => (int)Math.Floor(v);
+
+		[TypeConversion]
+		public static float IntToFloat(int v) => v;
+
+		[TypeConversion]
+		public static int StringToInt(string v) => int.Parse(v);
+
+		[TypeConversion]
+		public static float StringToFloat(string v) => float.Parse(v, CultureInfo.InvariantCulture);
+
+		[FunctionDefinition("print")]
+		public static void Print(string v) => Enviroment.printFunction(v);
+
+		[FunctionDefinition("add")]
+		public static string AddString(string a, string b) => a + b;
+
+		[FunctionDefinition("add")]
+		public static int AddInt(int a, int b) => a + b;
+		
+		[FunctionDefinition("add")]
+		public static float AddFloat(float a, float b) => a + b;
+		
+		[FunctionDefinition("sub")]
+		public static int SubInt(int a, int b) => a - b;
+		
+		[FunctionDefinition("sub")]
+		public static float SubFloat(float a, float b) => a - b;
+		
+		[FunctionDefinition("mul")]
+		public static int MulInt(int a, int b) => a * b;
+		
+		[FunctionDefinition("mul")]
+		public static float MulFloat(float a, float b) => a * b;
+		
+		[FunctionDefinition("div")]
+		public static int DivInt(int a, int b) => a / b;
+		
+		[FunctionDefinition("div")]
+		public static float DivFloat(float a, float b) => a / b;
+
 	}
 
 	public struct CodePosition {
@@ -450,7 +503,7 @@ namespace WordScript {
 							if (last == 'i') {
 								ret = new SyntaxNodeTypes.Literal<int>(int.Parse(currentToken.text), currentToken.position);
 							} else if (last == 'f') {
-								ret = new SyntaxNodeTypes.Literal<float>(float.Parse(currentToken.text), currentToken.position);
+								ret = new SyntaxNodeTypes.Literal<float>(float.Parse(currentToken.text, CultureInfo.InvariantCulture), currentToken.position);
 							} else throw new NumberLiteralException("Unknown number type '" + last + "' " + currentToken.position);
 						} else {
 							ret = new SyntaxNodeTypes.Literal<int>(int.Parse(currentToken.text), currentToken.position);
@@ -694,6 +747,8 @@ namespace WordScript {
 		readonly public TypeInfoProvider provider = new TypeInfoProvider();
 		protected Scope scope;
 		protected List<SyntaxNode> nodes = new List<SyntaxNode>();
+
+		public static Action<string> printFunction = (v) => { };
 
 		protected Scope GetScope(CodePosition position) {
 			return scope ?? (scope = new Scope(null, position));

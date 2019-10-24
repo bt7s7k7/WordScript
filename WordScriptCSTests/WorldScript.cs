@@ -79,7 +79,7 @@ namespace WordScriptTests {
 
 		[TestMethod]
 		public void CustomConversion() {
-			var overloads = provider.GetOverloads("TestClass.from");
+			var overloads = provider.GetOverloads("TestClass");
 			Assert.AreEqual(overloads.Count, 1, "Function signature not found, error in GetOverloads or [TypeConversion]");
 			var function = provider.GetFunction(overloads[0]);
 			Assert.AreEqual(function.returnType, typeof(TestClass), "Function return value is not correct. Either a different overload is registered or error");
@@ -87,14 +87,14 @@ namespace WordScriptTests {
 
 		[TestMethod]
 		public void Tokenizing() {
-			var tokens = CodeTokenizer.Tokenize("print IN string.concat \"Hello\" \"world\" . .\n  int.mul 5 10 , int.toString , concat \" = 25\" , printn .");
+			var tokens = CodeTokenizer.Tokenize("print IN add \"Hello\" \"world\" . .\n  mul 5 10 , string , add \" = 25\" , print .");
 			Assert.AreEqual(tokens.Count, 18);
 		}
 
 		[TestMethod]
 		public void Parsing() {
 			Enviroment enviroment = new Enviroment();
-			TokenParser.Parse("\"Comment\" .\nprint 25 .\nprint IN string.concat \"Hello\" \"world\" . .\n  int.mul 5 10 , int.toString , concat \" = 25\" , printn .", enviroment);
+			TokenParser.Parse("\"Comment\" .\nprint IN string 25 . .\nprint IN add \"Hello\" \"world\" . .\n  mul 5 10 , string , add \" = 25\" , print .", enviroment);
 			var statements = enviroment._DebugDumpNodes();
 			Assert.AreEqual(statements.Count, 4);
 		}
