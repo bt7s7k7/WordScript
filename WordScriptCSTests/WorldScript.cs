@@ -252,5 +252,18 @@ namespace WordScript.Tests {
 			block.Validate(enviroment);
 			Assert.AreEqual(block.ReturnType, typeof(int));
 		}
+
+		[TestMethod]
+		public void CodeExecution() {
+			Enviroment enviroment = new Enviroment(provider);
+			Assert.AreEqual(TokenParser.Parse("add 10 15 .", enviroment, CodePosition.GetExternal()).Evaluate(), 25);
+		}
+
+		[TestMethod]
+		public void CodeExecutionReturn() {
+			Enviroment enviroment = new Enviroment(provider);
+			Assert.AreEqual(TokenParser.Parse("add 10 15 , return .", enviroment, CodePosition.GetExternal()).Evaluate(), 25);
+		}
 	}
 }
+

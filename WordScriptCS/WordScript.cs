@@ -180,7 +180,7 @@ namespace WordScript {
 
 		public string GetTypeName(Type type) {
 			if (type.IsGenericType && !type.IsGenericTypeDefinition) {
-				return GetTypeName(type.GetGenericTypeDefinition()) + "!" + string.Join("!", type.GetGenericArguments().Select(v=>GetTypeName(v)));
+				return GetTypeName(type.GetGenericTypeDefinition()) + "!" + string.Join("!", type.GetGenericArguments().Select(v => GetTypeName(v)));
 			} else if (names.TryGetValue(type, out string name)) {
 				return name;
 			} else {
@@ -266,14 +266,13 @@ namespace WordScript {
 
 		public Type GetTypeByName(string name) {
 			var retCan = names.Where(v => v.Value == name).Select(v => v.Key);
-			if (retCan.Count() < 1) { 
+			if (retCan.Count() < 1) {
 				if (name.Contains('!')) {
 					var ss = name.Split('!');
 					var generic = GetTypeByName(ss.First());
-					var arguments = ss.Skip(1).Select(v=>GetTypeByName(v));
+					var arguments = ss.Skip(1).Select(v => GetTypeByName(v));
 					return generic.MakeGenericType(arguments.ToArray());
-				}
-				else throw new TypeNotRegisteredException("There is no type registered for name " + name);
+				} else throw new TypeNotRegisteredException("There is no type registered for name " + name);
 			} else return retCan.First();
 		}
 
@@ -651,16 +650,17 @@ namespace WordScript {
 		public CodePosition position;
 	}
 
-	public struct FlowControllWrapper<T> {
-		public enum Type {
-			None,
-			Return
-		}
+	public enum FlowControllType {
+		None,
+		Return
+	}
 
-		public Type type;
+	public struct FlowControllWrapper<T> {
+
+		public FlowControllType type;
 		public T value;
 
-		public FlowControllWrapper(Type type, T value) {
+		public FlowControllWrapper(FlowControllType type, T value) {
 			this.type = type;
 			this.value = value;
 		}
@@ -680,10 +680,18 @@ namespace WordScript {
 				if (function == null) {
 					if (variable == null) throw new Exception("Statement not validated yet");
 					else {
-						throw new NotImplementedException("Evaluation not yet implemented");
+						if (children.Count == 1) {
+							variable.SetValue(children[0].Evaluate());
+							return variable.Value;
+						} else if (variable.Position == position) {
+							// We are a declaration, so all the hard work has been done aleready at compile time
+							return variable.Value;
+						} else {
+							return variable.Value;
+						}
 					}
 				} else {
-					throw new NotImplementedException("Evaluation not yet implemented");
+					return function.function(children.Select(v => v.Evaluate()).ToArray());
 				}
 			}
 
@@ -699,7 +707,7 @@ namespace WordScript {
 					Type returnType = typeof(FlowControllWrapper<>).MakeGenericType(children[0].GetReturnType());
 					function = new Function {
 						arguments = new Type[] { childType },
-						function = (v) => returnType.GetConstructor(new Type[] { typeof(FlowControllWrapper<>.Type), returnType }).Invoke(FlowControllWrapper<int>.Type.Return, v),
+						function = (v) => Activator.CreateInstance(returnType, new object[] { FlowControllType.Return, v[0]}),
 						name = name,
 						returnType = returnType
 					};
@@ -792,9 +800,9 @@ namespace WordScript {
 				this.position = position;
 			}
 
-			public void SetValue(object newValue, CodePosition position, TypeInfoProvider provider) {
+			public void SetValue(object newValue) {
 				if (newValue.GetType() == type) value = newValue;
-				else throw new VariableException("Variable tryied to set a variable of type " + provider.GetTypeName(type) + " to type " + provider.GetTypeName(newValue.GetType()));
+				else throw new Exception("Variable tryied to set a variable of type " + type.FullName + " to type " + newValue.GetType().FullName);
 			}
 		}
 
@@ -855,13 +863,22 @@ namespace WordScript {
 		}
 
 		public object Evaluate() {
-			if (nodes.Count == 1 && retType == null) return nodes[0].Evaluate();
+			if (nodes.Count == 1 && retType == null) {
+				object res = nodes[0].Evaluate();
+				if (res == null) return null;
+				var resType = res.GetType();
+				if (resType.IsGenericType && resType.GetGenericTypeDefinition() == typeof(FlowControllWrapper<>)) {
+					res = resType.GetField("value").GetValue(res);
+				}
+				return res;
+			}
 
 			foreach (var node in nodes) {
 				var res = node.Evaluate();
+				if (res == null) continue;
 				var resType = res.GetType();
 				if (resType.IsGenericType && resType.GetGenericTypeDefinition() == typeof(FlowControllWrapper<>)) {
-					return res;
+					return resType.GetField("value").GetValue(res);
 				}
 			}
 
@@ -910,8 +927,8 @@ namespace WordScript {
 		public Scope.Variable DefineVariable(string name, Type type, CodePosition position) {
 			return GetScope().DefineVariable(name, type, position);
 		}
-		public void SetVariableValue(string name, object value, CodePosition position) {
-			GetScope().GetVariable(name).SetValue(value, position, provider);
+		public void SetVariableValue(string name, object value) {
+			GetScope().GetVariable(name).SetValue(value);
 		}
 
 		public void StartBlock(CodePosition position) {

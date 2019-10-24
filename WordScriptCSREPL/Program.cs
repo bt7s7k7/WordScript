@@ -8,9 +8,13 @@ using WordScript;
 
 namespace WordScriptREPL {
 	class Program {
+
+		[FunctionDefinition("print")]
+		public static void Print(string s) => Console.WriteLine(s);
+
 		static string file = "<anonymous>";
 		static void Main(string[] args) {
-			if (args.Length == 0 || args[0][0] != '#') {
+			if (args.Length == 0 || args[0][0] == '#') {
 				Console.WriteLine("WordScript REPL\nCopyright (C) Branislav Trstenský 2019\n");
 				while (true) {
 					Console.Write("> ");
@@ -20,6 +24,7 @@ namespace WordScriptREPL {
 			} else {
 				file = Path.GetFileName(args[0]);
 				Run(File.ReadAllText(args[0]));
+				Console.Read();
 			}
 		}
 		static Enviroment enviroment = new Enviroment(TypeInfoProvider.GetGlobal());
@@ -42,6 +47,10 @@ namespace WordScriptREPL {
 				foreach (var node in block.GetSyntaxNodes()) {
 					Console.WriteLine(node.Debug());
 				}
+
+				var ret = block.Evaluate();
+
+				Console.WriteLine(ret?.ToString() ?? "null");
 			}
 		}
 	}
