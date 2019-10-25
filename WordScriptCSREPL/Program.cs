@@ -14,6 +14,7 @@ namespace WordScriptREPL {
 
 		static string file = "<anonymous>";
 		static void Main(string[] args) {
+			enviroment = new Enviroment(TypeInfoProvider.GetGlobal());
 			if (args.Length == 0 || args[0][0] == '#') {
 				Console.WriteLine("WordScript REPL\nCopyright (C) Branislav Trstenský 2019\n");
 				while (true) {
@@ -27,13 +28,14 @@ namespace WordScriptREPL {
 				Console.Read();
 			}
 		}
-		static Enviroment enviroment = new Enviroment(TypeInfoProvider.GetGlobal());
+		static Enviroment enviroment = null;
 		static void Run(string code) {
 			List<CodeTokenizer.Token> tokens = null;
 			StatementBlock block = null;
 			try {
 				tokens = CodeTokenizer.Tokenize(code,file);
-				block = TokenParser.Parse(tokens, enviroment, CodePosition.GetExternal());
+				var tokensEnum = (IEnumerator<CodeTokenizer.Token>)tokens.GetEnumerator();
+				block = TokenParser.Parse(ref tokensEnum, enviroment, CodePosition.GetExternal());
 			} catch (WordScriptException ex) {
 				Console.WriteLine(ex.Message);
 			}

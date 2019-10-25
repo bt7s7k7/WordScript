@@ -226,6 +226,13 @@ namespace WordScript {
 				}
 			}
 
+			foreach (var name in names) {
+				AddFunction("block!" + name.Value+ ".invoke", (args) => {
+					var block = args[0];
+					return block.GetType().GetMethod("Evaluate").Invoke(block, new object[] { });
+				}, name.Key, new Type[] { typeof(TypedStatementBlock<>).MakeGenericType(name.Key) } );
+			}
+
 			foreach (var method in methods) {
 				var convAttr = method.GetCustomAttribute<TypeConversionAttribute>(false);
 				if (convAttr != null) {
@@ -296,6 +303,10 @@ namespace WordScript {
 	}
 
 	public static class DefaultTypeInfo {
+
+		[TypeName(typeof(TypedStatementBlock<>))]
+		public static string GetTypedStatementBlockName() => "block";
+
 		[TypeName(typeof(string))]
 		public static string GetStringName() => "string";
 
@@ -543,6 +554,12 @@ namespace WordScript {
 					// Move next to the start of the inline statement
 					if (!enumerator.MoveNext()) throw new EndOfFileException("Unexpected end of file, expected statement " + currentToken.position.ToString());
 					return ParseStatement(ref enumerator, enviroment, false);
+				} else if (currentToken.text == "BLOCK" || currentToken.text == "ACTION") {
+					var block = Parse(ref enumerator, enviroment, currentToken.position, false);
+					block.Validate(enviroment);
+					object value = currentToken.text == "ACTION" ? new VoidBlock { block = block } : block.CreateTypedBlock();
+
+					ret = (SyntaxNode)Activator.CreateInstance(typeof(SyntaxNodeTypes.Literal<>).MakeGenericType(value.GetType()), new object[] { value, currentToken.position });
 				} else {
 					throw new FunctionNotFoundException("Keyword unknown " + currentToken.ToString());
 				}
@@ -614,19 +631,24 @@ namespace WordScript {
 			}
 		}
 
-		public static StatementBlock Parse(List<CodeTokenizer.Token> tokens, Enviroment enviroment, CodePosition position, bool inline = false) {
-			IEnumerator<CodeTokenizer.Token> enumerator = tokens.GetEnumerator();
+		public static StatementBlock Parse(ref IEnumerator<CodeTokenizer.Token> enumerator, Enviroment enviroment, CodePosition position, bool inline = false) {
 
 			if (!inline) enviroment.StartBlock(position);
 
 			while (enumerator.MoveNext()) {
+				if (enumerator.Current.type == CodeTokenizer.Token.Type.Keyword && enumerator.Current.text == "END") {
+					break;
+				}
 				enviroment.AppendSyntaxNode(ParseStatement(ref enumerator, enviroment, false));
 			}
 
 			return inline ? null : enviroment.EndBlock();
 		}
 
-		public static StatementBlock Parse(string text, Enviroment enviroment, CodePosition position, bool inline = false) => Parse(CodeTokenizer.Tokenize(text), enviroment, position, inline);
+		public static StatementBlock Parse(string text, Enviroment enviroment, CodePosition position, bool inline = false) {
+			var tokens = (IEnumerator<CodeTokenizer.Token>)CodeTokenizer.Tokenize(text);
+			return Parse(ref tokens, enviroment, position, inline);
+		}
 	}
 
 	public abstract class SyntaxNode {
@@ -707,7 +729,7 @@ namespace WordScript {
 					Type returnType = typeof(FlowControllWrapper<>).MakeGenericType(children[0].GetReturnType());
 					function = new Function {
 						arguments = new Type[] { childType },
-						function = (v) => Activator.CreateInstance(returnType, new object[] { FlowControllType.Return, v[0]}),
+						function = (v) => Activator.CreateInstance(returnType, new object[] { FlowControllType.Return, v[0] }),
 						name = name,
 						returnType = returnType
 					};
@@ -725,6 +747,11 @@ namespace WordScript {
 					var type = enviroment.provider.GetTypeByName(segments[2]);
 					variable = enviroment.DefineVariable(segments[1], type, position);
 				} else {
+
+					if (name[0] == '.' && children.Count > 0) {
+						name = enviroment.provider.GetTypeName(children[0].GetReturnType()) + name;
+					}
+
 					if (function != null) throw new Exception("Tryied to validate a validated statement");
 					var overloads = enviroment.provider.GetOverloads(name);
 					var signature = enviroment.provider.GetFunctionSignature(name, children.Select(v => v.GetReturnType()));
@@ -751,7 +778,7 @@ namespace WordScript {
 					indent--;
 					write("}");
 				} else if (variable != null) {
-					write("Variable " + (children.Count == 1 ? "assignment" : (variable.Position == position ? "definition" : "query")) + ": " + variable.GetType().FullName + " " + variable.Position);
+					write("Variable " + (children.Count == 1 ? "assignment" : (variable.Position == position ? "definition" : "query")) + ": " + variable.Type + " " + variable.Position);
 				} else {
 					throw new Exception("Statement not validated yet");
 				}
@@ -837,6 +864,31 @@ namespace WordScript {
 
 	}
 
+	public class TypedStatementBlock<T> {
+		public StatementBlock block;
+		public T Evaluate() {
+			return (T)block.Evaluate();
+		}
+
+		public TypedStatementBlock(StatementBlock block) {
+			this.block = block;
+		}
+	}
+
+	public class VoidBlock {
+		public StatementBlock block;
+
+		public void Evaluate() {
+			block.Evaluate();
+		}
+
+		[FunctionDefinition("action.invoke")]
+		public static void Evaluate(VoidBlock voidBlock) => voidBlock.block.Evaluate();
+
+		[TypeName(typeof(VoidBlock))]
+		public static string GetTypeName() => "action";
+	}
+
 	public class StatementBlock {
 		protected List<SyntaxNode> nodes = new List<SyntaxNode>();
 		protected Scope scope;
@@ -853,6 +905,11 @@ namespace WordScript {
 		}
 
 		public void Validate(Enviroment enviroment) {
+			if (nodes.Count == 1) {
+				retType = nodes[0].GetReturnType();
+				return;
+			}
+
 			foreach (var node in nodes) {
 				var returnType = node.GetReturnType();
 				if (returnType.IsConstructedGenericType && returnType.GetGenericTypeDefinition() == typeof(FlowControllWrapper<>)) {
@@ -860,10 +917,12 @@ namespace WordScript {
 					if (returnType.GetGenericArguments()[0] != retType) throw new ReturnTypeException("Return statement is not of type " + enviroment.provider.GetTypeName(retType) + " " + node.position.ToString());
 				}
 			}
+
+			if (retType == null) retType = typeof(void);
 		}
 
 		public object Evaluate() {
-			if (nodes.Count == 1 && retType == null) {
+			if (nodes.Count == 1) {
 				object res = nodes[0].Evaluate();
 				if (res == null) return null;
 				var resType = res.GetType();
@@ -886,6 +945,18 @@ namespace WordScript {
 		}
 
 		public List<SyntaxNode> GetSyntaxNodes() => nodes;
+
+		public object CreateTypedBlock() {
+			if (retType == null) throw new Exception("Block has not been validated yet");
+			else {
+				if (retType == typeof(void)) {
+					return new VoidBlock { block = this };
+				} else {
+					var type = typeof(TypedStatementBlock<>).MakeGenericType(new Type[] { retType });
+					return Activator.CreateInstance(type, new object[] { this });
+				}
+			}
+		}
 	}
 
 	[Serializable]
