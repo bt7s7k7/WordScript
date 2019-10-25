@@ -223,14 +223,16 @@ namespace WordScript {
 					var name = (string)method.Invoke(null, new object[] { });
 
 					names.Add(nameAttr.targetType, name);
+
+					AddFunction("string", (v) => v[0].ToString(), typeof(string), new Type[] { nameAttr.targetType });
 				}
 			}
 
 			foreach (var name in names) {
-				AddFunction("block!" + name.Value+ ".invoke", (args) => {
+				AddFunction("block!" + name.Value + ".invoke", (args) => {
 					var block = args[0];
 					return block.GetType().GetMethod("Evaluate").Invoke(block, new object[] { });
-				}, name.Key, new Type[] { typeof(TypedStatementBlock<>).MakeGenericType(name.Key) } );
+				}, name.Key, new Type[] { typeof(TypedStatementBlock<>).MakeGenericType(name.Key) });
 			}
 
 			foreach (var method in methods) {
@@ -300,6 +302,58 @@ namespace WordScript {
 			return this;
 
 		}
+
+		public void MapType(Type type) {
+			string typeName = type.Name;
+			if (!names.ContainsKey(type)) {
+				names.Add(type, typeName);
+			}
+
+			AddFunction("string", (v) => v[0].ToString(), typeof(string), new Type[] { type });
+
+			void regiserMethod (MethodInfo method) {
+				if (!names.ContainsKey(method.ReturnType)) names.Add(method.ReturnType, method.ReturnType.Name);
+				foreach (var argument in method.GetParameters()) {
+					if (!names.ContainsKey(argument.ParameterType)) names.Add(argument.ParameterType, argument.ParameterType.Name);
+				}
+
+				try {
+					if (method.IsStatic) {
+						AddFunction(typeName + "." + method.Name, (v) => method.Invoke(null, v), method.ReturnType, method.GetParameters().Select(v => v.ParameterType));
+					} else {
+						AddFunction(typeName + "." + method.Name, (v) => method.Invoke(v[0], v.Skip(1).ToArray()), method.ReturnType, method.GetParameters().Select(v => v.ParameterType));
+					}
+				} catch (ArgumentException) {
+
+				}
+			};
+
+			foreach (var method in type.GetMethods()) {
+				regiserMethod(method);
+			}
+
+			foreach (var field in type.GetFields()) {
+				if (!names.ContainsKey(field.FieldType)) names.Add(field.FieldType, field.FieldType.Name);
+				if (field.IsStatic) {
+					AddFunction(typeName + "." + field.Name, (v) => field.GetValue(null), field.FieldType, null);
+					AddFunction(typeName + "." + field.Name, (v) => {
+						field.SetValue(null, v[0]);
+						return field.GetValue(null);
+					}, field.FieldType, new Type[] { field.FieldType });
+				} else {
+					AddFunction(typeName + "." + field.Name, (v) => field.GetValue(v[0]), field.FieldType, new Type[] { type });
+					AddFunction(typeName + "." + field.Name, (v) => {
+						field.SetValue(v[0], v[1]);
+						return field.GetValue(null);
+					}, field.FieldType, new Type[] { type, field.FieldType });
+				}
+			}
+
+			foreach (var property in type.GetProperties()) {
+				if (property.GetMethod != null) regiserMethod(property.GetMethod);
+				if (property.SetMethod != null) regiserMethod(property.SetMethod);
+			}
+		}
 	}
 
 	public static class DefaultTypeInfo {
@@ -318,12 +372,6 @@ namespace WordScript {
 
 		[TypeName(typeof(FlowControllWrapper<>))]
 		public static string GetFCWName() => "fcw";
-
-		[TypeConversion(isStandard = true)]
-		public static string IntToString(int v) => v.ToString();
-
-		[TypeConversion(isStandard = true)]
-		public static string FloatToString(float v) => v.ToString();
 
 		[TypeConversion(isStandard = true)]
 		public static int FloatToInt(float v) => (int)Math.Floor(v);

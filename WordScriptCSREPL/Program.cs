@@ -15,6 +15,7 @@ namespace WordScriptREPL {
 		static string file = "<anonymous>";
 		static void Main(string[] args) {
 			enviroment = new Enviroment(TypeInfoProvider.GetGlobal());
+			enviroment.provider.MapType(typeof(Console));
 			if (args.Length == 0 || args[0][0] == '#') {
 				Console.WriteLine("WordScript REPL\nCopyright (C) Branislav Trstenský 2019\n");
 				while (true) {
