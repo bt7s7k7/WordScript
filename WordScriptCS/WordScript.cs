@@ -564,7 +564,7 @@ namespace WordScript {
 							else if (code[position] == 'r') stringBuilder.Append("\r");
 							else if (code[position] == '\'') stringBuilder.Append("'");
 							else if (code[position] == '"') stringBuilder.Append("\"");
-							else throw new UnknownEscapeCharacterException("Unknown escape character \\" + code[position]);
+							else throw new UnknownEscapeCharacterException("Unknown escape character \\" + code[position] + " " + codePosition.ToString());
 
 							isEscape = false;
 						} else {
@@ -668,7 +668,7 @@ namespace WordScript {
 							ret = new SyntaxNodeTypes.Literal<int>(int.Parse(currentToken.text), currentToken.position);
 						}
 					} catch (FormatException) {
-						throw new NumberLiteralException("Number is not of correct format " + currentToken.position);
+						throw new NumberLiteralException("Number is not of correct format /* Check number type suffix */ " + currentToken.position);
 					}
 				} else {
 					statement = new SyntaxNodeTypes.Statement(currentToken.position);
@@ -693,7 +693,7 @@ namespace WordScript {
 				{
 					var lastPos = enumerator.Current.position;
 					if (!enumerator.MoveNext()) {
-						throw new EndOfFileException("Unexpected end of file, expected a argument, if statement end expected terminator " + lastPos);
+						throw new EndOfFileException("Unexpected end of file, expected a argument, terminator or pipe " + lastPos);
 					}
 				}
 
@@ -712,7 +712,7 @@ namespace WordScript {
 					if (statement != null) {
 						statement.children.Add(ParseStatement(ref enumerator, enviroment, true));
 					} else {
-						throw new UnexpectedTokenException("Unexpected argument, expected a terminator " + current.position);
+						throw new UnexpectedTokenException("Unexpected argument, expected a terminator  /* Only statements can have arguments */ " + current.position);
 					}
 				}
 			}
@@ -845,7 +845,7 @@ namespace WordScript {
 					variable = enviroment.GetVariable(name.Substring(0, name.Length - 1)) ?? throw new FunctionNotFoundException("Failed to get variable " + name.Substring(0, name.Length - 1) + " " + position.ToString()); ;
 					if (variable.Type != children[0].GetReturnType()) throw new FunctionNotFoundException("Cannot assign type " + enviroment.provider.GetTypeName(children[0].GetReturnType()) + " to variable of type " + enviroment.provider.GetTypeName(variable.Type) + " " + position.ToString());
 				} else if (name.Length > 7 && name.Substring(0, 7) == "DEFINE:") {
-					if (children.Count != 0) throw new FunctionNotFoundException("Variable definition cannot have arguments " + position.ToString());
+					if (children.Count != 0) throw new FunctionNotFoundException("Variable definition cannot have arguments, expected DEFINE:<name>:<type> " + position.ToString());
 					var segments = name.Split(':');
 					if (segments.Length != 3) throw new FunctionNotFoundException("Variable definition in not in correct format, expected DEFINE:<name>:<type> " + position.ToString());
 					var type = enviroment.provider.GetTypeByName(segments[2]);
@@ -1026,7 +1026,7 @@ namespace WordScript {
 				var returnType = node.GetReturnType();
 				if (returnType.IsConstructedGenericType && returnType.GetGenericTypeDefinition() == typeof(FlowControllWrapper<>)) {
 					if (retType == null) retType = returnType.GetGenericArguments()[0];
-					if (returnType.GetGenericArguments()[0] != retType) throw new ReturnTypeException("Return statement is not of type " + enviroment.provider.GetTypeName(retType) + " " + node.position.ToString());
+					if (returnType.GetGenericArguments()[0] != retType) throw new ReturnTypeException("Return statement is not of type " + enviroment.provider.GetTypeName(retType) + " /* All return statements must be of same type, dictated by the first one */ " + node.position.ToString());
 				}
 			}
 
