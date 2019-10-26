@@ -371,6 +371,9 @@ namespace WordScript {
 		[TypeName(typeof(FlowControllWrapper<>))]
 		public static string GetFCWName() => "fcw";
 
+		[TypeName(typeof(bool))]
+		public static string GetBoolName() => "bool";
+
 		[TypeConversion(isStandard = true)]
 		public static int FloatToInt(float v) => (int)Math.Floor(v);
 
@@ -409,6 +412,45 @@ namespace WordScript {
 
 		[FunctionDefinition("div", isStandard = true)]
 		public static float DivFloat(float a, float b) => a / b;
+
+		[FunctionDefinition("not", isStandard = true)]
+		public static bool Not(bool a) => !a;
+
+		[FunctionDefinition("and", isStandard = true)]
+		public static bool And(bool a, bool b) => a && b;
+		
+		[FunctionDefinition("or", isStandard = true)]
+		public static bool Or(bool a, bool b) => a || b;
+
+		[FunctionDefinition("gt", isStandard = true)]
+		public static bool Greather(int a, int b) => a > b;
+		
+		[FunctionDefinition("ls", isStandard = true)]
+		public static bool Lesser(int a, int b) => a < b;
+		
+		[FunctionDefinition("gte", isStandard = true)]
+		public static bool GreatherOrEqual(int a, int b) => a >= b;
+		
+		[FunctionDefinition("lse", isStandard = true)]
+		public static bool LesserOrEqual(int a, int b) => a <= b;
+		
+		[FunctionDefinition("gt", isStandard = true)]
+		public static bool Greather(float a, float b) => a > b;
+		
+		[FunctionDefinition("ls", isStandard = true)]
+		public static bool Lesser(float a, float b) => a < b;
+		
+		[FunctionDefinition("gte", isStandard = true)]
+		public static bool GreatherOrEqual(float a, float b) => a >= b;
+		
+		[FunctionDefinition("lse", isStandard = true)]
+		public static bool LesserOrEqual(float a, float b) => a <= b;
+
+		[FunctionDefinition("true", isStandard = true)]
+		public static bool True() => true;
+		
+		[FunctionDefinition("false", isStandard = true)]
+		public static bool False() => true;
 	}
 
 	public struct CodePosition {
@@ -785,6 +827,16 @@ namespace WordScript {
 						name = "string",
 						function = (v) => string.Join(" ", v.Select(w => w.ToString()))
 					};
+				} else if (name == "eq") { 
+					if (children.Count != 2) throw new FunctionNotFoundException("Equals statement must have 2 arguments " + position.ToString());
+					var aType = children[0].GetReturnType();
+					var bType = children[1].GetReturnType();
+					function = new Function {
+						arguments = new Type[] { aType, bType },
+						returnType = typeof(bool),
+						name = "eq",
+						function = (v) => Object.Equals(v[0], v[1])
+					};
 				} else if (name[0] == '&') {
 					if (children.Count != 0) throw new FunctionNotFoundException("You cannot call variable query with any arguments " + position.ToString());
 					variable = enviroment.GetVariable(name.Substring(1)) ?? throw new FunctionNotFoundException("Failed to get variable " + name.Substring(1) + " " + position.ToString()); ;
@@ -822,7 +874,7 @@ namespace WordScript {
 
 			public override void GetDebug(Action<string> write, ref int indent) {
 				if (function != null) {
-					write("Statment[" + children.Count + "] = {");
+					write("Statment[" + children.Count + "] \"" + function.name + " " + string.Join(" ", function.arguments.Select(v=>v.Name)) + "\":" + function.returnType.Name + " = {");
 					indent++;
 					foreach (var child in children) {
 						child.GetDebug(write, ref indent);
