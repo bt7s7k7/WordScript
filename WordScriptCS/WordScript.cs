@@ -768,7 +768,7 @@ namespace WordScript {
 
 			public void Validate(string name, Enviroment enviroment) {
 				if (name == "return") {
-					if (children.Count != 1) throw new FunctionNotFoundException("Return statement can must one argument" + position.ToString());
+					if (children.Count != 1) throw new FunctionNotFoundException("Return statement must have one argument " + position.ToString());
 
 					Type childType = children[0].GetReturnType();
 					Type returnType = typeof(FlowControllWrapper<>).MakeGenericType(children[0].GetReturnType());
@@ -795,7 +795,7 @@ namespace WordScript {
 				} else if (name.Length > 7 && name.Substring(0, 7) == "DEFINE:") {
 					if (children.Count != 0) throw new FunctionNotFoundException("Variable definition cannot have arguments " + position.ToString());
 					var segments = name.Split(':');
-					if (segments.Length != 3) throw new FunctionNotFoundException("Variable definition in not in corret format, expected DEFINE:<name>:<type> " + position.ToString());
+					if (segments.Length != 3) throw new FunctionNotFoundException("Variable definition in not in correct format, expected DEFINE:<name>:<type> " + position.ToString());
 					var type = enviroment.provider.GetTypeByName(segments[2]);
 					variable = enviroment.DefineVariable(segments[1], type, position);
 				} else {
