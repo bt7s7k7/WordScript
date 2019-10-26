@@ -900,7 +900,7 @@ namespace WordScript {
 						if (children.Count != 0) throw new FunctionNotFoundException("Variable definition cannot have arguments, expected DEFINE:<name>:<type> " + position.ToString());
 						var type = enviroment.provider.GetTypeByName(segments[2]);
 
-						var variable = enviroment.DefineVariable(segments[1], type, position);
+						var variable = enviroment.DefineVariable(segments[1][0] == '&' ? segments[1].Substring(1) : segments[1], type, position);
 						var returnType = variable.Type;
 						var isRef = false;
 						if (segments[1][0] == '&') {
@@ -924,7 +924,7 @@ namespace WordScript {
 					} else if (segments.Length == 2) {
 						if (children.Count != 1) throw new FunctionNotFoundException("Variable definition must have 1 argument, expected DEFINE:<name> <value> " + position.ToString());
 						var type = children[0].GetReturnType();
-						var variable = enviroment.DefineVariable(segments[1], type, position);
+						var variable = enviroment.DefineVariable(segments[1][0] == '&' ? segments[1].Substring(1) : segments[1], type, position);
 						var returnType = variable.Type;
 						var isRef = false;
 						if (segments[1][0] == '&') {

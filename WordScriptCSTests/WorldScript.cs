@@ -264,6 +264,16 @@ namespace WordScript.Tests {
 			Enviroment enviroment = new Enviroment(provider);
 			Assert.AreEqual(TokenParser.Parse("add 10 15 , return .", enviroment, CodePosition.GetExternal()).Evaluate(), 25);
 		}
+
+		[TestMethod]
+		public void RunTheExampleFile() {
+			var text = System.IO.File.ReadAllText("../../../Examples/example.ws");
+			Enviroment enviroment = new Enviroment(TypeInfoProvider.GetGlobal());
+			var block = TokenParser.Parse(text, enviroment, CodePosition.GetExternal());
+			block.Validate(enviroment);
+			Assert.AreEqual(typeof(string), block.ReturnType);
+			Assert.AreEqual("aaaab", block.Evaluate());
+		}
 	}
 }
 
