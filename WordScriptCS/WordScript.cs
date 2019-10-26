@@ -1060,7 +1060,7 @@ namespace WordScript {
 		}
 
 		public void Validate(Enviroment enviroment) {
-			if (nodes.Count == 1) {
+			if (nodes.Count == 1 && nodes[0].GetReturnType().GetGenericTypeDefinition() != typeof(FlowControllWrapper<>)) {
 				retType = nodes[0].GetReturnType();
 				return;
 			}

@@ -179,7 +179,7 @@ namespace WordScript.Tests {
 		public void StandardInclusion() {
 			TypeInfoProvider provider = new TypeInfoProvider().LoadGlobals();
 
-			Assert.IsNotNull(provider.GetFunction("string int"));
+			Assert.IsNotNull(provider.GetFunction("int float"));
 		}
 
 		[TestMethod]
