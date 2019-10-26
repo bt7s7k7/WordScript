@@ -223,8 +223,6 @@ namespace WordScript {
 					var name = (string)method.Invoke(null, new object[] { });
 
 					names.Add(nameAttr.targetType, name);
-
-					AddFunction("string", (v) => v[0].ToString(), typeof(string), new Type[] { nameAttr.targetType });
 				}
 			}
 
@@ -411,7 +409,6 @@ namespace WordScript {
 
 		[FunctionDefinition("div", isStandard = true)]
 		public static float DivFloat(float a, float b) => a / b;
-
 	}
 
 	public struct CodePosition {
@@ -570,10 +567,10 @@ namespace WordScript {
 					ret.Add(Token.MakeTerminator(word, codePosition));
 				} else if (word == ",") {
 					ret.Add(Token.MakePipe(word, codePosition));
-				} else if (word.Where(v => char.IsLetter(v) && char.ToUpper(v) == v).Count() == word.Length) {
-					ret.Add(Token.MakeKeyword(word, codePosition));
 				} else if (isString) {
 					ret.Add(Token.MakeStringLiteral(word, codePosition));
+				} else if (word.Where(v => char.IsLetter(v) && char.ToUpper(v) == v).Count() == word.Length) {
+					ret.Add(Token.MakeKeyword(word, codePosition));
 				} else {
 					ret.Add(Token.MakeWord(word, codePosition));
 				}
@@ -781,6 +778,13 @@ namespace WordScript {
 						name = name,
 						returnType = returnType
 					};
+				} else if (name == "string") {
+					function = new Function {
+						arguments = children.Select(v => v.GetReturnType()),
+						returnType = typeof(string),
+						name = "string",
+						function = (v) => string.Join(" ", v.Select(w => w.ToString()))
+					};
 				} else if (name[0] == '&') {
 					if (children.Count != 0) throw new FunctionNotFoundException("You cannot call variable query with any arguments " + position.ToString());
 					variable = enviroment.GetVariable(name.Substring(1)) ?? throw new FunctionNotFoundException("Failed to get variable " + name.Substring(1) + " " + position.ToString()); ;
@@ -921,6 +925,10 @@ namespace WordScript {
 		public TypedStatementBlock(StatementBlock block) {
 			this.block = block;
 		}
+
+		public override string ToString() {
+			return "[block[" + block.GetSyntaxNodes().Count + "]]:" + typeof(T).Name; 
+		}
 	}
 
 	public class VoidBlock {
@@ -935,6 +943,10 @@ namespace WordScript {
 
 		[TypeName(typeof(VoidBlock))]
 		public static string GetTypeName() => "action";
+
+		public override string ToString() {
+			return "[action[" + block.GetSyntaxNodes().Count + "]]";
+		}
 	}
 
 	public class StatementBlock {
