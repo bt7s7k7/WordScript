@@ -356,6 +356,9 @@ namespace WordScript {
 
 	public static class DefaultTypeInfo {
 
+		[TypeName(typeof(TypedVariable<>))]
+		public static string GetTypedVariableName() => "variable";
+
 		[TypeName(typeof(TypedStatementBlock<>))]
 		public static string GetTypedStatementBlockName() => "block";
 
@@ -838,8 +841,21 @@ namespace WordScript {
 						function = (v) => Object.Equals(v[0], v[1])
 					};
 				} else if (name[0] == '&') {
-					if (children.Count != 0) throw new FunctionNotFoundException("You cannot call variable query with any arguments " + position.ToString());
-					variable = enviroment.GetVariable(name.Substring(1)) ?? throw new FunctionNotFoundException("Failed to get variable " + name.Substring(1) + " " + position.ToString()); ;
+					if (name.Length > 1 && name[1] == '&') {
+						if (children.Count != 0) throw new FunctionNotFoundException("You cannot call variable reference query with any arguments " + position.ToString());
+						var variable = enviroment.GetVariable(name.Substring(2)) ?? throw new FunctionNotFoundException("Failed to get variable " + name.Substring(1) + " " + position.ToString());
+						Type typedVariableType = typeof(TypedVariable<>).MakeGenericType(variable.Type);
+						var typedVariable = Activator.CreateInstance(typedVariableType, new object[] { variable });
+						function = new Function {
+							name = name,
+							arguments = new Type[0],
+							returnType = typedVariableType,
+							function = (v) => typedVariable
+						};
+					} else {
+						if (children.Count != 0) throw new FunctionNotFoundException("You cannot call variable query with any arguments " + position.ToString());
+						variable = enviroment.GetVariable(name.Substring(1)) ?? throw new FunctionNotFoundException("Failed to get variable " + name.Substring(1) + " " + position.ToString()); ;
+					}
 				} else if (name[name.Length - 1] == '=') {
 					if (children.Count != 1) throw new FunctionNotFoundException("Variable assignment must have one value " + position.ToString());
 					variable = enviroment.GetVariable(name.Substring(0, name.Length - 1)) ?? throw new FunctionNotFoundException("Failed to get variable " + name.Substring(0, name.Length - 1) + " " + position.ToString()); ;
@@ -953,6 +969,16 @@ namespace WordScript {
 			}
 		}
 	}
+	public class TypedVariable<T> {
+		protected Scope.Variable variable;
+
+		public TypedVariable(Scope.Variable variable) {
+			this.variable = variable;
+		}
+
+		public T Value { get => (T)variable.Value; set => variable.SetValue(value); }
+	}
+
 
 	public class Scope {
 		public class Variable {
