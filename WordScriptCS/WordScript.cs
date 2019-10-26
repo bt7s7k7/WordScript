@@ -309,7 +309,7 @@ namespace WordScript {
 
 			AddFunction("string", (v) => v[0].ToString(), typeof(string), new Type[] { type });
 
-			void regiserMethod (MethodInfo method) {
+			void regiserMethod(MethodInfo method) {
 				if (!names.ContainsKey(method.ReturnType)) names.Add(method.ReturnType, method.ReturnType.Name);
 				foreach (var argument in method.GetParameters()) {
 					if (!names.ContainsKey(argument.ParameterType)) names.Add(argument.ParameterType, argument.ParameterType.Name);
@@ -418,37 +418,37 @@ namespace WordScript {
 
 		[FunctionDefinition("and", isStandard = true)]
 		public static bool And(bool a, bool b) => a && b;
-		
+
 		[FunctionDefinition("or", isStandard = true)]
 		public static bool Or(bool a, bool b) => a || b;
 
 		[FunctionDefinition("gt", isStandard = true)]
 		public static bool Greather(int a, int b) => a > b;
-		
+
 		[FunctionDefinition("ls", isStandard = true)]
 		public static bool Lesser(int a, int b) => a < b;
-		
+
 		[FunctionDefinition("gte", isStandard = true)]
 		public static bool GreatherOrEqual(int a, int b) => a >= b;
-		
+
 		[FunctionDefinition("lse", isStandard = true)]
 		public static bool LesserOrEqual(int a, int b) => a <= b;
-		
+
 		[FunctionDefinition("gt", isStandard = true)]
 		public static bool Greather(float a, float b) => a > b;
-		
+
 		[FunctionDefinition("ls", isStandard = true)]
 		public static bool Lesser(float a, float b) => a < b;
-		
+
 		[FunctionDefinition("gte", isStandard = true)]
 		public static bool GreatherOrEqual(float a, float b) => a >= b;
-		
+
 		[FunctionDefinition("lse", isStandard = true)]
 		public static bool LesserOrEqual(float a, float b) => a <= b;
 
 		[FunctionDefinition("true", isStandard = true)]
 		public static bool True() => true;
-		
+
 		[FunctionDefinition("false", isStandard = true)]
 		public static bool False() => true;
 	}
@@ -917,7 +917,7 @@ namespace WordScript {
 
 			public override void GetDebug(Action<string> write, ref int indent) {
 				if (function != null) {
-					write("Statment[" + children.Count + "] \"" + function.name + " " + string.Join(" ", function.arguments.Select(v=>v.Name)) + "\":" + function.returnType.Name + " = {");
+					write("Statment[" + children.Count + "] \"" + function.name + " " + string.Join(" ", function.arguments.Select(v => v.Name)) + "\":" + function.returnType.Name + " = {");
 					indent++;
 					foreach (var child in children) {
 						child.GetDebug(write, ref indent);
@@ -1022,7 +1022,7 @@ namespace WordScript {
 		}
 
 		public override string ToString() {
-			return "[block[" + block.GetSyntaxNodes().Count + "]]:" + typeof(T).Name; 
+			return "[block[" + block.GetSyntaxNodes().Count + "]]:" + typeof(T).Name;
 		}
 	}
 
