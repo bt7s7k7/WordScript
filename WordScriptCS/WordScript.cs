@@ -895,11 +895,54 @@ namespace WordScript {
 					variable = enviroment.GetVariable(name.Substring(0, name.Length - 1)) ?? throw new FunctionNotFoundException("Failed to get variable " + name.Substring(0, name.Length - 1) + " " + position.ToString()); ;
 					if (variable.Type != children[0].GetReturnType()) throw new FunctionNotFoundException("Cannot assign type " + enviroment.provider.GetTypeName(children[0].GetReturnType()) + " to variable of type " + enviroment.provider.GetTypeName(variable.Type) + " " + position.ToString());
 				} else if (name.Length > 7 && name.Substring(0, 7) == "DEFINE:") {
-					if (children.Count != 0) throw new FunctionNotFoundException("Variable definition cannot have arguments, expected DEFINE:<name>:<type> " + position.ToString());
 					var segments = name.Split(':');
-					if (segments.Length != 3) throw new FunctionNotFoundException("Variable definition in not in correct format, expected DEFINE:<name>:<type> " + position.ToString());
-					var type = enviroment.provider.GetTypeByName(segments[2]);
-					variable = enviroment.DefineVariable(segments[1], type, position);
+					if (segments.Length == 3) {
+						if (children.Count != 0) throw new FunctionNotFoundException("Variable definition cannot have arguments, expected DEFINE:<name>:<type> " + position.ToString());
+						var type = enviroment.provider.GetTypeByName(segments[2]);
+
+						var variable = enviroment.DefineVariable(segments[1], type, position);
+						var returnType = variable.Type;
+						var isRef = false;
+						if (segments[1][0] == '&') {
+							returnType = typeof(TypedVariable<>).MakeGenericType(returnType);
+							segments[1] = segments[1].Substring(1);
+							isRef = true;
+						}
+
+						if (isRef) {
+							function = new Function {
+								arguments = new Type[] { },
+								function = (v) => {
+									return Activator.CreateInstance(returnType, new object[] { variable });
+								},
+								name = name,
+								returnType = returnType
+							};
+						} else {
+							this.variable = variable;
+						}
+					} else if (segments.Length == 2) {
+						if (children.Count != 1) throw new FunctionNotFoundException("Variable definition must have 1 argument, expected DEFINE:<name> <value> " + position.ToString());
+						var type = children[0].GetReturnType();
+						var variable = enviroment.DefineVariable(segments[1], type, position);
+						var returnType = variable.Type;
+						var isRef = false;
+						if (segments[1][0] == '&') {
+							returnType = typeof(TypedVariable<>).MakeGenericType(returnType);
+							segments[1] = segments[1].Substring(1);
+							isRef = true;
+						}
+						function = new Function {
+							arguments = new Type[] { type },
+							function = (v) => {
+								variable.SetValue(v[0]);
+								if (isRef) return Activator.CreateInstance(returnType, new object[] { variable });
+								else return variable.Value;
+							},
+							name = name,
+							returnType = returnType
+						};
+					} else throw new FunctionNotFoundException("Variable definition in not in correct format, expected DEFINE:<name>:<type> or DEFINE:<name> <value>" + position.ToString());
 				} else {
 
 					if (name[0] == '.' && children.Count > 0) {
