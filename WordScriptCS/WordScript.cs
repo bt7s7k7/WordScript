@@ -1,12 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Reflection;
-using System.Linq;
-using System.Collections;
-using System.Text;
 using System.Globalization;
+using System.Linq;
+using System.Reflection;
 using System.Runtime.Serialization;
-using System.Linq.Expressions;
+using System.Text;
 
 namespace WordScript {
 	[AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]

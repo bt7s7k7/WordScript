@@ -1,8 +1,5 @@
-﻿using System;
-using System.Text;
-using System.Collections.Generic;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using WordScript;
+﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System;
 
 namespace WordScript.Tests {
 
@@ -214,7 +211,7 @@ namespace WordScript.Tests {
 		}
 
 		public class TestGenericClass<T> {
-			
+
 
 		}
 
@@ -235,7 +232,7 @@ namespace WordScript.Tests {
 			block.Validate(enviroment);
 			Assert.AreEqual(block.ReturnType, typeof(int));
 		}
-		
+
 		[TestMethod]
 		public void ReturningFromBlockMultiple() {
 			Enviroment enviroment = new Enviroment(provider);
@@ -243,7 +240,7 @@ namespace WordScript.Tests {
 			block.Validate(enviroment);
 			Assert.AreEqual(block.ReturnType, typeof(int));
 		}
-		
+
 		[TestMethod]
 		[ExpectedException(typeof(ReturnTypeException))]
 		public void ReturningFromBlockMismatchDetect() {

@@ -1,9 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using WordScript;
 
 namespace WordScriptREPL {
@@ -34,7 +31,7 @@ namespace WordScriptREPL {
 			List<CodeTokenizer.Token> tokens = null;
 			StatementBlock block = null;
 			try {
-				tokens = CodeTokenizer.Tokenize(code,file);
+				tokens = CodeTokenizer.Tokenize(code, file);
 				var tokensEnum = (IEnumerator<CodeTokenizer.Token>)tokens.GetEnumerator();
 				block = TokenParser.Parse(ref tokensEnum, enviroment, CodePosition.GetExternal());
 			} catch (WordScriptException ex) {
