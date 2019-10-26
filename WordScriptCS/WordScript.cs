@@ -31,6 +31,11 @@ namespace WordScript {
 		}
 	}
 
+	[AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
+	public sealed class WordScriptTypeAttribute : Attribute {
+
+	}
+
 	public class Function {
 		public Func<object[], object> function;
 		public Type returnType;
@@ -211,8 +216,9 @@ namespace WordScript {
 			names = new Dictionary<Type, string>();
 			functions = new Dictionary<string, Function>();
 			overloads = new Dictionary<string, List<string>>();
-			var methods = AppDomain.CurrentDomain.GetAssemblies().AsParallel()
-				.SelectMany((v) => v.GetTypes())
+			var types = AppDomain.CurrentDomain.GetAssemblies().AsParallel()
+				.SelectMany((v) => v.GetTypes());
+			var methods = types
 				.SelectMany(v => v.GetMethods())
 				.Where(v => v.IsStatic && !v.IsGenericMethodDefinition && !v.IsGenericMethod);
 
@@ -277,6 +283,14 @@ namespace WordScript {
 				listMethod.MakeGenericMethod(elemType).Invoke(this, new object[] { funcName });
 			}
 
+			if (!standardOnly) {
+				foreach (var type in types) {
+					var typeAttr = type.GetCustomAttribute<WordScriptTypeAttribute>();
+					if (typeAttr != null) {
+						MapType(type);
+					}
+				}
+			}
 			return this;
 		}
 
@@ -328,7 +342,7 @@ namespace WordScript {
 					if (method.IsStatic) {
 						AddFunction(typeName + "." + method.Name, (v) => method.Invoke(null, v), method.ReturnType, method.GetParameters().Select(v => v.ParameterType));
 					} else {
-						AddFunction(typeName + "." + method.Name, (v) => method.Invoke(v[0], v.Skip(1).ToArray()), method.ReturnType, method.GetParameters().Select(v => v.ParameterType));
+						AddFunction(typeName + "." + method.Name, (v) => method.Invoke(v[0], v.Skip(1).ToArray()), method.ReturnType, new Type[] { type }.Concat(method.GetParameters().Select(v => v.ParameterType)));
 					}
 				} catch (ArgumentException) {
 
@@ -354,6 +368,10 @@ namespace WordScript {
 						return field.GetValue(null);
 					}, field.FieldType, new Type[] { type, field.FieldType });
 				}
+			}
+
+			foreach (var constructor in type.GetConstructors()) {
+				AddFunction(typeName, (v) => Activator.CreateInstance(type, v), type, constructor.GetParameters().Select(v => v.ParameterType));
 			}
 
 			foreach (var property in type.GetProperties()) {

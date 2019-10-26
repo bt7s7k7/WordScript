@@ -271,6 +271,30 @@ namespace WordScript.Tests {
 			Assert.AreEqual(typeof(string), block.ReturnType);
 			Assert.AreEqual("aaaab", block.Evaluate());
 		}
+
+		[WordScriptType]
+		class TestMapClass {
+			public int i;
+			public TestMapClass() {
+				i = 5;
+			}
+
+			public TestMapClass(int i) {
+				this.i = i;
+			}
+
+			public int GetI() => i;
+		}
+
+		[TestMethod] 
+		public void TypeAttribute() {
+			Enviroment enviroment = new Enviroment(provider);
+			Assert.IsNotNull(TokenParser.Parse("TestMapClass .", enviroment, CodePosition.GetExternal()).Evaluate() as TestMapClass);
+
+			Assert.AreEqual(5, TokenParser.Parse("TestMapClass , .i .", enviroment, CodePosition.GetExternal()).Evaluate());
+			Assert.AreEqual(20, TokenParser.Parse("TestMapClass 20 , .i .", enviroment, CodePosition.GetExternal()).Evaluate());
+			Assert.AreEqual(20, TokenParser.Parse("TestMapClass 20 , .GetI .", enviroment, CodePosition.GetExternal()).Evaluate());
+		}
 	}
 }
 
