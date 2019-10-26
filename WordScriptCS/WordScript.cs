@@ -879,7 +879,7 @@ namespace WordScript {
 								weight++;
 							}
 						}
-						return (overload, convertors:_convertors, weight);
+						return (overload, convertors: _convertors, weight);
 					}).Where(v => v.weight >= 0);
 
 					if (noImplicitConversion) weights = weights.Where(v => v.weight == 0);
