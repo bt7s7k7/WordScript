@@ -6,6 +6,7 @@ using System.Collections;
 using System.Text;
 using System.Globalization;
 using System.Runtime.Serialization;
+using System.Linq.Expressions;
 
 namespace WordScript {
 	[AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
@@ -267,6 +268,16 @@ namespace WordScript {
 					AddFunction(function);
 				}
 			}
+			var listMethod = typeof(TypeInfoProvider).GetMethod("CreateArrayFunctions", BindingFlags.NonPublic | BindingFlags.Instance);
+
+			foreach (var name in names) {
+				var funcName = "array!" + name.Value;
+				var elemType = name.Key;
+
+				if (elemType.IsGenericTypeDefinition) continue;
+
+				listMethod.MakeGenericMethod(elemType).Invoke(this, new object[] { funcName });
+			}
 
 			return this;
 		}
@@ -352,6 +363,26 @@ namespace WordScript {
 				if (property.SetMethod != null) regiserMethod(property.SetMethod);
 			}
 		}
+
+		private void CreateArrayFunctions<T>(string funcName) {
+			var elemType = typeof(T);
+			var listType = typeof(List<>).MakeGenericType(elemType);
+			AddFunction(funcName, (v) => new List<T>(), listType);
+
+			funcName += ".";
+
+			AddFunction(funcName + "at", (v) => ((List<T>)v[0])[(int)v[1]], elemType, new Type[] { listType, typeof(int) });
+			AddFunction(funcName + "size", (v) => ((List<T>)v[0]).Count, typeof(int), new Type[] { listType });
+			AddFunction(funcName + "push", (v) => { ((List<T>)v[0]).Add((T)v[1]); return v[0]; }, listType, new Type[] { listType, elemType });
+			AddFunction(funcName + "forEach", (v) => {
+				((List<T>)v[0]).ForEach(w => {
+					((TypedVariable<T>)v[1]).Value = w;
+					((VoidBlock)v[2]).Evaluate();
+				});
+				return v[0];
+			}, listType, new Type[] { listType, typeof(TypedVariable<T>), typeof(VoidBlock) });
+
+		}
 	}
 
 	public static class DefaultTypeInfo {
@@ -361,6 +392,9 @@ namespace WordScript {
 
 		[TypeName(typeof(TypedStatementBlock<>))]
 		public static string GetTypedStatementBlockName() => "block";
+
+		[TypeName(typeof(List<>))]
+		public static string GetEnumerableName() => "array";
 
 		[TypeName(typeof(string))]
 		public static string GetStringName() => "string";
@@ -559,6 +593,7 @@ namespace WordScript {
 						if (position >= code.Length) {
 							throw new EndOfFileException("Unexpected end of file, expected string literal end " + codePosition.ToString());
 						};
+						if (code[position] == '\n') codePosition.NextLine();
 
 						if (isEscape) {
 							if (code[position] == 'n') stringBuilder.Append("\n");
@@ -586,7 +621,6 @@ namespace WordScript {
 
 						position++;
 						codePosition.NextLetter();
-						if (code[position] == '\n') codePosition.NextLine();
 					}
 				} else {
 					while (true) {
@@ -886,11 +920,18 @@ namespace WordScript {
 								// The same so don't add weight
 								_convertors[i - 1] = null; // No conversion needed
 							} else {
-								try {
-									_convertors[i - 1] = enviroment.provider.GetFunction(signatureType + " " + overloadType);
-								} catch (FunctionNotFoundException) {
-									return (overload, convertors: new Function[0], weight: -1);
-								}
+								if (overloadType == "string") {
+									_convertors[i - 1] = new Function {
+										arguments = new Type[] { enviroment.provider.GetTypeByName(signatureType) },
+										returnType = typeof(string),
+										name = "string",
+										function = (v) => v[0].ToString()
+									};
+								} else try {
+										_convertors[i - 1] = enviroment.provider.GetFunction(overloadType + " " + signatureType);
+									} catch (FunctionNotFoundException) {
+										return (overload, convertors: new Function[0], weight: -1);
+									}
 
 								weight++;
 							}
@@ -900,7 +941,7 @@ namespace WordScript {
 
 					if (noImplicitConversion) weights = weights.Where(v => v.weight == 0);
 
-					if (!weights.Any()) throw new FunctionNotFoundException("Function not found \"" + signature + "\"" + position.ToString() + ", posible overloads: {\n  " + string.Join(", \n  ", overloads) + "\n}");
+					if (!weights.Any()) throw new FunctionNotFoundException("Function not found \"" + string.Join(" ", signature) + "\"" + position.ToString() + ", posible overloads: {\n  " + string.Join(", \n  ", overloads) + "\n}");
 
 					(string[] overload, Function[] convertors, int weight) toUse = weights.First();
 
@@ -1086,7 +1127,7 @@ namespace WordScript {
 		}
 
 		public void Validate(Enviroment enviroment) {
-			if (nodes.Count == 1 && nodes[0].GetReturnType().GetGenericTypeDefinition() != typeof(FlowControllWrapper<>)) {
+			if (nodes.Count == 1 && nodes[0].GetReturnType().IsGenericType && nodes[0].GetReturnType().GetGenericTypeDefinition() != typeof(FlowControllWrapper<>)) {
 				retType = nodes[0].GetReturnType();
 				return;
 			}
