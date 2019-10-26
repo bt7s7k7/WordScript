@@ -733,7 +733,7 @@ namespace WordScript {
 		}
 
 		public static StatementBlock Parse(string text, Enviroment enviroment, CodePosition position, bool inline = false) {
-			var tokens = (IEnumerator<CodeTokenizer.Token>)CodeTokenizer.Tokenize(text);
+			var tokens = (IEnumerator<CodeTokenizer.Token>)CodeTokenizer.Tokenize(text).GetEnumerator();
 			return Parse(ref tokens, enviroment, position, inline);
 		}
 	}
@@ -808,7 +808,7 @@ namespace WordScript {
 				return function?.returnType ?? variable?.Type ?? throw new Exception("Statement not validated yet");
 			}
 
-			public void Validate(string name, Enviroment enviroment) {
+			public void Validate(string name, Enviroment enviroment, bool noImplicitConversion = false) {
 				if (name == "return") {
 					if (children.Count != 1) throw new FunctionNotFoundException("Return statement must have one argument " + position.ToString());
 
@@ -827,7 +827,7 @@ namespace WordScript {
 						name = "string",
 						function = (v) => string.Join(" ", v.Select(w => w.ToString()))
 					};
-				} else if (name == "eq") { 
+				} else if (name == "eq") {
 					if (children.Count != 2) throw new FunctionNotFoundException("Equals statement must have 2 arguments " + position.ToString());
 					var aType = children[0].GetReturnType();
 					var bType = children[1].GetReturnType();
@@ -857,14 +857,57 @@ namespace WordScript {
 					}
 
 					if (function != null) throw new Exception("Tryied to validate a validated statement");
-					var overloads = enviroment.provider.GetOverloads(name);
-					var signature = enviroment.provider.GetFunctionSignature(name, children.Select(v => v.GetReturnType()));
-					var signIndex = overloads.IndexOf(signature);
-					if (signIndex == -1) {
-						throw new FunctionNotFoundException("Function not found \"" + signature + "\"" + position.ToString() + ", posible overloads: {\n  " + string.Join(", \n  ", overloads) + "\n}");
-					} else {
-						function = enviroment.provider.GetFunction(signature);
+					var signature = enviroment.provider.GetFunctionSignature(name, children.Select(v => v.GetReturnType())).Split(' ');
+					var overloads = enviroment.provider.GetOverloads(name).Select(v => v.Split(' ')).Where(v => v.Length == signature.Length);
+					var weights = overloads.Select(overload => {
+						int weight = 0;
+						Function[] _convertors = new Function[overload.Length - 1];
+						for (int i = 1, len = overload.Length; i < len; i++) {
+							var overloadType = overload[i];
+							var signatureType = signature[i];
+
+							if (overloadType == signatureType) {
+								// The same so don't add weight
+								_convertors[i - 1] = null; // No conversion needed
+							} else {
+								try {
+									_convertors[i - 1] = enviroment.provider.GetFunction(signatureType + " " + overloadType);
+								} catch (FunctionNotFoundException) {
+									return (overload, convertors: new Function[0], weight: -1);
+								}
+
+								weight++;
+							}
+						}
+						return (overload, convertors:_convertors, weight);
+					}).Where(v => v.weight >= 0);
+
+					if (noImplicitConversion) weights = weights.Where(v => v.weight == 0);
+
+					if (!weights.Any()) throw new FunctionNotFoundException("Function not found \"" + signature + "\"" + position.ToString() + ", posible overloads: {\n  " + string.Join(", \n  ", overloads) + "\n}");
+
+					(string[] overload, Function[] convertors, int weight) toUse = weights.First();
+
+					for (int i = 0, len = weights.Count(); i < len; i++) {
+						var curr = weights.ElementAt(i);
+						if (curr.weight < toUse.weight) toUse = curr;
 					}
+
+					var overloadTypes = toUse.overload.Skip(1);
+					var convertors = toUse.convertors;
+
+					for (int i = 0, len = overloadTypes.Count(); i < len; i++) {
+						if (convertors[i] != null) {
+							var child = children[i];
+							var wrapper = new Statement(child.position);
+							wrapper.children.Add(child);
+							wrapper.Validate(overloadTypes.ElementAt(i), enviroment, true);
+
+							children[i] = wrapper;
+						}
+					}
+
+					function = enviroment.provider.GetFunction(string.Join(" ", toUse.overload));
 				}
 			}
 
