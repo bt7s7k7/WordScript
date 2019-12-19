@@ -503,7 +503,7 @@ namespace WordScript {
 		public static bool True() => true;
 
 		[FunctionDefinition("false", isStandard = true)]
-		public static bool False() => true;
+		public static bool False() => false;
 
 		[FunctionDefinition("if", isStandard = true)]
 		public static bool If(bool condition, VoidBlock action) {
