@@ -724,7 +724,7 @@ namespace WordScript {
 					// Move next to the start of the inline statement
 					if (!enumerator.MoveNext()) throw new EndOfFileException("Unexpected end of file, expected statement " + currentToken.position.ToString());
 					return ParseStatement(ref enumerator, enviroment, false);
-				} else if (currentToken.text == "BLOCK" || currentToken.text == "ACTION") {
+				} else if (currentToken.text == "BLOCK" || currentToken.text == "B" || currentToken.text == "ACTION") {
 					var block = Parse(ref enumerator, enviroment, currentToken.position, false);
 					block.Validate(enviroment);
 					object value = currentToken.text == "ACTION" ? new VoidBlock { block = block } : block.CreateTypedBlock();
@@ -806,7 +806,7 @@ namespace WordScript {
 			if (!inline) enviroment.StartBlock(position);
 
 			while (enumerator.MoveNext()) {
-				if (enumerator.Current.type == CodeTokenizer.Token.Type.Keyword && enumerator.Current.text == "END") {
+				if (enumerator.Current.type == CodeTokenizer.Token.Type.Keyword && (enumerator.Current.text == "END" || enumerator.Current.text == "E")) {
 					break;
 				}
 				enviroment.AppendSyntaxNode(ParseStatement(ref enumerator, enviroment, false));
