@@ -504,6 +504,36 @@ namespace WordScript {
 
 		[FunctionDefinition("false", isStandard = true)]
 		public static bool False() => true;
+
+		[FunctionDefinition("if", isStandard = true)]
+		public static bool If(bool condition, VoidBlock action) {
+			if (condition) {
+				action.Evaluate();
+			}
+
+			return !condition;
+		}
+
+		[FunctionDefinition("if", isStandard = true)]
+		public static bool If(bool condition, VoidBlock thenAction, VoidBlock elseAction) {
+			if (condition) {
+				thenAction.Evaluate();
+			} else {
+				elseAction.Evaluate();
+			}
+			return !condition;
+		}
+		
+		[FunctionDefinition("if", isStandard = true)]
+		public static bool If(bool prev, bool condition, VoidBlock thenAction, VoidBlock elseAction) {
+			if (prev && condition) {
+				thenAction.Evaluate();
+			} else {
+				elseAction.Evaluate();
+			}
+
+			return !(prev && condition);
+		}
 	}
 
 	public struct CodePosition {
