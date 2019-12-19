@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -144,6 +144,10 @@ namespace WordScript {
 		private Dictionary<string, Function> functions = new Dictionary<string, Function>();
 		private Dictionary<string, List<string>> overloads = new Dictionary<string, List<string>>();
 		private static TypeInfoProvider singleton = null;
+
+		public void RegisterType(Type type, string name) {
+			names.Add(type, name);
+		}
 
 		public static TypeInfoProvider GetGlobal() {
 			if (singleton == null) {
@@ -523,7 +527,7 @@ namespace WordScript {
 			}
 			return !condition;
 		}
-		
+
 		[FunctionDefinition("if", isStandard = true)]
 		public static bool If(bool prev, bool condition, VoidBlock thenAction, VoidBlock elseAction) {
 			if (prev && condition) {
